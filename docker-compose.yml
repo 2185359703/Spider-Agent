@@ -1,0 +1,76 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: auto_spider
+      MYSQL_USER: auto_spider
+      MYSQL_PASSWORD: auto_spider
+      MYSQL_ROOT_PASSWORD: local-root-password
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    ports:
+      - "13306:3306"
+    volumes:
+      - auto-spider-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uauto_spider", "-pauto_spider"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "16379:6379"
+    volumes:
+      - auto-spider-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: mysql+pymysql://auto_spider:auto_spider@mysql:3306/auto_spider?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/0
+      COLLECTOR_REPO_PATH: /srv/collector-catalog
+      EVIDENCE_ROOT: /srv/auto_spider/evidence
+      WORKTREE_ROOT: /srv/auto_spider/worktrees
+    ports:
+      - "18000:8000"
+    volumes:
+      - ./evidence:/srv/auto_spider/evidence
+      - ./worktrees:/srv/auto_spider/worktrees
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["celery", "-A", "auto_spider.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "analysis,coding,validation,reporting,maintenance"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: mysql+pymysql://auto_spider:auto_spider@mysql:3306/auto_spider?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/0
+      COLLECTOR_REPO_PATH: /srv/collector-catalog
+      EVIDENCE_ROOT: /srv/auto_spider/evidence
+      WORKTREE_ROOT: /srv/auto_spider/worktrees
+    volumes:
+      - ./evidence:/srv/auto_spider/evidence
+      - ./worktrees:/srv/auto_spider/worktrees
+      - ${COLLECTOR_REPO_HOST_PATH:-.}:/srv/collector-catalog:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  auto-spider-mysql:
+  auto-spider-redis:

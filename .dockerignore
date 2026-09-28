@@ -1,0 +1,8 @@
+.git
+.env*
+__pycache__
+.pytest_cache
+.ruff_cache
+evidence
+worktrees
+node_modules

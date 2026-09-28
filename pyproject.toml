@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-spider"
+version = "0.1.0"
+description = "AI-driven recruitment collector onboarding platform"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.14,<2",
+  "celery[redis]>=5.4,<6",
+  "fastapi>=0.115,<1",
+  "langgraph>=0.2,<1",
+  "openai-codex>=0.1,<1",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "PyMySQL>=1.1,<2",
+  "python-multipart>=0.0.20,<1",
+  "redis>=5,<6",
+  "SQLAlchemy>=2,<3",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<7",
+  "ruff>=0.9,<1",
+]
+
+[project.scripts]
+auto-spider = "auto_spider.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["auto_spider*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "double"
