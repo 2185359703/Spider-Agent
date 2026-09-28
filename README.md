@@ -2,7 +2,7 @@
 
 输入招聘入口 URL，由 AI 分析网站、开发采集器、验证并汇报，自动生成候选提交；人工运行、人工审查后采纳，有问题则进入 AI 纠错。
 
-当前交付为开发设计文档，尚未实现应用、部署服务或生成 Git 提交。
+当前已完成首阶段后端骨架、数据模型、Alembic 迁移、FastAPI API、Celery 任务入口、LangGraph 图定义、fake 分析/修复闭环、受管仓库只读检查和自动化测试。真实 Playwright/spider-king 取证、真实 Codex 代码修改、React 管理后台和 Docker 运行尚待后续阶段。
 
 ## 文档入口
 
