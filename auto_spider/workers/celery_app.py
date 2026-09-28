@@ -10,7 +10,13 @@ except ImportError:  # pragma: no cover - local dependency fallback
 
 settings = get_settings()
 celery_app = (
-    Celery("auto_spider", broker=settings.redis_url, backend=settings.redis_url) if Celery else None
+    Celery(
+        "auto_spider",
+        broker=settings.redis_url,
+        backend=settings.redis_url,
+    )
+    if Celery
+    else None
 )
 if celery_app:
     celery_app.conf.update(
@@ -23,3 +29,4 @@ if celery_app:
         broker_transport_options={"visibility_timeout": 3600},
         result_backend_transport_options={"visibility_timeout": 3600},
     )
+    from auto_spider.workers import tasks as _registered_tasks  # noqa: F401
