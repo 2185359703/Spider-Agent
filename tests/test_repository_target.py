@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from auto_spider.git.target import CollectorRepository
+from auto_spider.git.worktree import WorktreeManager
 
 
 def test_collector_target_uses_committed_baseline_without_dirty_files() -> None:
@@ -14,3 +15,16 @@ def test_collector_target_uses_committed_baseline_without_dirty_files() -> None:
     assert context["dirty_state_excluded"] is True
     assert "collectors/public_html_career.py" in context["dirty_files"]
     assert "tests/test_platforms.py" in context["dirty_files"]
+
+
+def test_worktree_manager_defaults_to_read_only(tmp_path: Path) -> None:
+    target = CollectorRepository(
+        Path(r"C:\Users\ASUS\Desktop\jichu-v5-sync"),
+        "d1f3c72ec5e10041f32914d465464808f5c18d9a",
+    )
+    manager = WorktreeManager(target)
+    manager.root = tmp_path.resolve()
+    context = manager.prepare("task-test", "run-test")
+    assert context.created is False
+    assert context.mutation_enabled is False
+    assert context.baseline_ref == "d1f3c72ec5e10041f32914d465464808f5c18d9a"

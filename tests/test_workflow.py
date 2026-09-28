@@ -10,6 +10,7 @@ from auto_spider.db.models import (
 )
 from auto_spider.schemas import ManualReviewRequest, ManualRunRequest, ObservationCode, ReviewStatus
 from auto_spider.services.tasks import create_manual_run, create_review
+from auto_spider.workflows.graph import build_graph
 from auto_spider.workflows.runner import WorkflowRunner
 
 
@@ -101,3 +102,8 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
     refreshed = db_session.get(OnboardingTask, task.id)
     assert refreshed.status == "WAITING_MANUAL_RUN"
     assert db_session.query(FailureBundle).one().status == "REPAIRED"
+
+
+def test_langgraph_definition_compiles() -> None:
+    graph = build_graph()
+    assert graph is not None
