@@ -51,6 +51,11 @@ function observationCopy(code?: string | null) {
   return observationMeta[code ?? ""] ?? { label: code ?? "等待分析", detail: "系统正在收集入口和接口证据。" };
 }
 
+function roleAllows(...roles: string[]) {
+  const role = configuredRole();
+  return role === "admin" || roles.includes(role);
+}
+
 function StatusPill({ status }: { status: TaskStatus }) {
   const meta = statusMeta[status];
   return <span className={`status-pill ${meta.tone}`}><i />{meta.label}</span>;
@@ -157,12 +162,13 @@ function formatRelative(value: string) { const date = new Date(value); if (Numbe
 function NewTaskPage() {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
+  const canCreate = roleAllows("operator");
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [platformKey, setPlatformKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  async function handleSubmit(event: React.FormEvent) { event.preventDefault(); if (!url.trim()) return; setSubmitting(true); try { const result = await createBatch({ items: [{ entry_url: url.trim(), platform_name: name.trim() || undefined, platform_key: platformKey.trim() || undefined, repository_key: "aicoding-auto_spider" }], analysis_profile: "internship-http-v1", dry_run: true, client_request_id: `frontend-${Date.now()}` }); message.success(`任务已创建：${result.task_ids[0]}`); navigate(`/tasks/${result.task_ids[0]}`); } catch { message.error("任务创建失败，请检查 API 服务"); } finally { setSubmitting(false); } }
-  return <div className="page-enter narrow-page"><button className="back-link" onClick={() => navigate("/tasks")}><ArrowLeftOutlined />返回任务</button><div className="page-heading"><div><div className="eyebrow">NEW INTAKE / 01</div><h1>新建接入</h1><p>提交招聘入口，系统会生成分析、规范和候选代码。</p></div></div><form className="intake-form" onSubmit={handleSubmit}><label>招聘入口 URL <span>必填</span><Input size="large" placeholder="https://careers.example.com/internships" value={url} onChange={(e) => setUrl(e.target.value)} /></label><div className="form-grid"><label>公司名称 <span>可选</span><Input size="large" placeholder="例如：快手" value={name} onChange={(e) => setName(e.target.value)} /></label><label>平台键 <span>可选</span><Input size="large" placeholder="例如：kuaishou" value={platformKey} onChange={(e) => setPlatformKey(e.target.value)} /></label></div><div className="repo-selection"><div className="repo-selection-title">代码边界</div><div className="repo-line"><span className="repo-line-dot source" /><div><strong>fun-crawler-v2</strong><small>只读实验源 · 基线 16cba84</small></div><Tag>SOURCE</Tag></div><div className="repo-line"><span className="repo-line-dot output" /><div><strong>aicoding-auto_spider</strong><small>AI 候选产出 · 自动推送分支</small></div><Tag color="orange">AI OUTPUT</Tag></div></div><Button type="primary" htmlType="submit" size="large" loading={submitting} icon={<SendOutlined />}>开始分析</Button></form></div>;
+  async function handleSubmit(event: React.FormEvent) { event.preventDefault(); if (!canCreate) { message.warning("当前角色没有创建接入任务的权限"); return; } if (!url.trim()) return; setSubmitting(true); try { const result = await createBatch({ items: [{ entry_url: url.trim(), platform_name: name.trim() || undefined, platform_key: platformKey.trim() || undefined, repository_key: "aicoding-auto_spider" }], analysis_profile: "internship-http-v1", dry_run: true, client_request_id: `frontend-${Date.now()}` }); message.success(`任务已创建：${result.task_ids[0]}`); navigate(`/tasks/${result.task_ids[0]}`); } catch { message.error("任务创建失败，请检查 API 服务"); } finally { setSubmitting(false); } }
+  return <div className="page-enter narrow-page"><button className="back-link" onClick={() => navigate("/tasks")}><ArrowLeftOutlined />返回任务</button><div className="page-heading"><div><div className="eyebrow">NEW INTAKE / 01</div><h1>新建接入</h1><p>提交招聘入口，系统会生成分析、规范和候选代码。</p></div></div><form className="intake-form" onSubmit={handleSubmit}><label>招聘入口 URL <span>必填</span><Input size="large" placeholder="https://careers.example.com/internships" value={url} onChange={(e) => setUrl(e.target.value)} /></label><div className="form-grid"><label>公司名称 <span>可选</span><Input size="large" placeholder="例如：快手" value={name} onChange={(e) => setName(e.target.value)} /></label><label>平台键 <span>可选</span><Input size="large" placeholder="例如：kuaishou" value={platformKey} onChange={(e) => setPlatformKey(e.target.value)} /></label></div><div className="repo-selection"><div className="repo-selection-title">代码边界</div><div className="repo-line"><span className="repo-line-dot source" /><div><strong>fun-crawler-v2</strong><small>只读实验源 · 基线 16cba84</small></div><Tag>SOURCE</Tag></div><div className="repo-line"><span className="repo-line-dot output" /><div><strong>aicoding-auto_spider</strong><small>AI 候选产出 · 自动推送分支</small></div><Tag color="orange">AI OUTPUT</Tag></div></div><Button type="primary" htmlType="submit" size="large" loading={submitting} disabled={!canCreate} icon={<SendOutlined />}>{canCreate ? "开始分析" : "当前角色只读"}</Button></form></div>;
 }
 
 function TaskDetailPage() {
@@ -202,6 +208,7 @@ function CandidatePanel({ taskId, submissions }: { taskId: string; submissions: 
 function ManualPanel({ bundle, onRefresh }: { bundle: TaskBundle; onRefresh: () => void }) {
   const { message } = AntApp.useApp();
   const { task, submissions, manualRuns } = bundle;
+  const canRun = roleAllows("operator");
   const [running, setRunning] = useState(false);
   const defaultRevision = submissions[0]?.commit_sha ?? "";
   const [revision, setRevision] = useState(defaultRevision);
@@ -209,6 +216,7 @@ function ManualPanel({ bundle, onRefresh }: { bundle: TaskBundle; onRefresh: () 
   useEffect(() => { if (!revision && defaultRevision) setRevision(defaultRevision); }, [defaultRevision, revision]);
   const command = `python -m crawler --platform ${task.platform_key} --max-pages 1 --page-size 2`;
   async function submit() {
+    if (!canRun) { message.warning("当前角色没有登记人工运行的权限"); return; }
     if (!revision.trim()) { message.warning("请先填写候选代码版本"); return; }
     let samples: unknown[];
     try {
