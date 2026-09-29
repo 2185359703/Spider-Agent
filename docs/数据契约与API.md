@@ -299,12 +299,15 @@ erDiagram
 
 分页使用 `cursor` 和 `limit`；下载接口返回短期签名地址或流式响应，不返回服务器绝对路径。
 
+角色权限：`viewer` 只能读取；`operator` 可创建接入、登记人工运行、恢复任务和触发修复；`reviewer` 可提交人工审查；`admin` 拥有全部权限。开发环境 `AUTH_MODE=dev` 默认使用 `dev-user/admin`，生产或联调环境设置 `AUTH_MODE=header` 后必须提供 `X-User-Id` 和 `X-User-Role`。
+
 ### 4.2 接口表
 
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
 | POST | `/api/v1/onboarding/batches` | 批量创建 URL 任务 |
 | GET | `/api/v1/onboarding/batches` | 查询最近批次 |
+| GET | `/api/v1/me` | 查询当前用户和角色 |
 | GET | `/api/v1/onboarding/batches/{batch_id}` | 查询批量汇总 |
 | GET | `/api/v1/onboarding/submissions` | 查询全局候选提交 |
 | GET | `/api/v1/onboarding/samples` | 查询全局人工运行样本 |

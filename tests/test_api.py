@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from auto_spider.api.deps import get_session
 from auto_spider.api.main import app
+from auto_spider.config import get_settings
 from auto_spider.db.models import (
     CodeSubmission,
     FailureBundle,
@@ -246,5 +247,45 @@ def test_task_history_endpoints_return_manual_review_and_repair_data(db_session)
         )
         assert duplicate_policy.status_code == 409
         assert client.get("/api/v1/system/repositories").status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_role_permissions_protect_mutating_endpoints(db_session, monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_mode", "header")
+
+    def override_session():
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        payload = {
+            "items": [{"entry_url": "https://example.com/internships"}],
+            "client_request_id": "role-check-0001",
+        }
+        viewer_headers = {"X-User-Id": "viewer-1", "X-User-Role": "viewer"}
+        operator_headers = {"X-User-Id": "operator-1", "X-User-Role": "operator"}
+        admin_headers = {"X-User-Id": "admin-1", "X-User-Role": "admin"}
+        assert client.get("/api/v1/me", headers=viewer_headers).json()["role"] == "viewer"
+        assert client.post(
+            "/api/v1/onboarding/batches", json=payload, headers=viewer_headers
+        ).status_code == 403
+        assert client.post(
+            "/api/v1/onboarding/batches", json=payload, headers=operator_headers
+        ).status_code == 201
+        policy_payload = {
+            "name": "role-policy",
+            "version": "v1",
+            "status": "draft",
+            "policy": {},
+        }
+        assert client.post(
+            "/api/v1/policies", json=policy_payload, headers=viewer_headers
+        ).status_code == 403
+        assert client.post(
+            "/api/v1/policies", json=policy_payload, headers=admin_headers
+        ).status_code == 201
     finally:
         app.dependency_overrides.clear()

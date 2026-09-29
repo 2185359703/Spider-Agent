@@ -167,6 +167,11 @@ export interface RepositoryStatusBundle {
   aicoding: RepositoryStatus;
 }
 
+export interface ActorProfile {
+  user_id: string;
+  role: "viewer" | "operator" | "reviewer" | "admin" | string;
+}
+
 export interface SpecSnapshot {
   spec_version: number;
   schema_version: string;

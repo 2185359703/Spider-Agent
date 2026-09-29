@@ -1,15 +1,29 @@
 import { mockBundle, mockTasks } from "./mock";
-import type { BatchDetail, BatchSummary, CreateBatchRequest, GlobalSample, GlobalSubmission, PolicyVersion, RepositoryStatusBundle, SubmissionDiff, Task, TaskBundle } from "./types";
+import type { ActorProfile, BatchDetail, BatchSummary, CreateBatchRequest, GlobalSample, GlobalSubmission, PolicyVersion, RepositoryStatusBundle, SubmissionDiff, Task, TaskBundle } from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
+const API_USER_ID = (import.meta.env.VITE_USER_ID as string | undefined)?.trim();
+const API_USER_ROLE = (import.meta.env.VITE_USER_ROLE as string | undefined)?.trim();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const identityHeaders: Record<string, string> = {};
+  if (API_USER_ID) identityHeaders["X-User-Id"] = API_USER_ID;
+  if (API_USER_ROLE) identityHeaders["X-User-Role"] = API_USER_ROLE;
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...identityHeaders, ...(init?.headers ?? {}) },
   });
   if (!response.ok) throw new Error(`请求失败 ${response.status}`);
   return response.json() as Promise<T>;
+}
+
+export async function getCurrentActor(): Promise<ActorProfile> {
+  if (!API_BASE) return { user_id: API_USER_ID ?? "dev-user", role: API_USER_ROLE ?? "admin" };
+  return request<ActorProfile>("/api/v1/me");
+}
+
+export function configuredRole(): string {
+  return API_USER_ROLE ?? "admin";
 }
 
 export async function listTasks(): Promise<Task[]> {

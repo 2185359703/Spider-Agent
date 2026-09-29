@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
-from auto_spider.api.deps import CurrentActor, DbSession
+from auto_spider.api.deps import AdminActor, CurrentActor, DbSession, OperatorActor, ReviewerActor
 from auto_spider.config import get_settings
 from auto_spider.db.models import (
     CodeSubmission,
@@ -79,6 +79,11 @@ def enqueue_repair(task_id: str, bundle_id: str) -> None:
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok", "service": "auto-spider"}
+
+
+@app.get("/api/v1/me")
+def current_actor(actor: CurrentActor) -> dict[str, str]:
+    return {"user_id": actor.user_id, "role": actor.role}
 
 
 def _require_task(session, task_id: str) -> OnboardingTask:
@@ -305,7 +310,7 @@ def list_policy_versions(
 def create_policy_version(
     request: PolicyVersionRequest,
     session: DbSession,
-    actor: CurrentActor,
+    actor: AdminActor,
 ) -> dict:
     duplicate = session.scalar(
         select(PolicyVersion).where(
@@ -373,7 +378,7 @@ def list_onboarding_tasks(
 def create_onboarding_batch(
     request: CreateBatchRequest,
     session: DbSession,
-    actor: CurrentActor,
+    actor: OperatorActor,
 ) -> CreateBatchResponse:
     batch, tasks = create_batch(session, request, actor.user_id)
     for task in tasks:
@@ -473,7 +478,7 @@ def register_manual_run(
     task_id: str,
     request: ManualRunRequest,
     session: DbSession,
-    actor: CurrentActor,
+    actor: OperatorActor,
 ) -> dict:
     task = _require_task(session, task_id)
     manual = create_manual_run(session, task, request)
@@ -548,7 +553,7 @@ def submit_review(
     task_id: str,
     request: ManualReviewRequest,
     session: DbSession,
-    actor: CurrentActor,
+    actor: ReviewerActor,
 ) -> dict:
     task = _require_task(session, task_id)
     review, bundle = create_review(session, task, request)
@@ -640,7 +645,7 @@ def resume_task(
     task_id: str,
     request: ResumeRequest,
     session: DbSession,
-    actor: CurrentActor,
+    actor: OperatorActor,
 ) -> dict:
     task = _require_task(session, task_id)
     task.status = "SUBMITTED"
@@ -655,7 +660,7 @@ def repair_task(
     task_id: str,
     request: RepairRequest,
     session: DbSession,
-    actor: CurrentActor,
+    actor: OperatorActor,
 ) -> dict:
     _require_task(session, task_id)
     if not request.failure_bundle_id:
