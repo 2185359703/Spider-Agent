@@ -1,6 +1,6 @@
 # 数据契约与 API
 
-本文档把 [开发设计](开发设计.md) 中的状态、字段和接口落成可实现的契约。代码尚未实现；示例是第一版建议基线。
+本文档把 [开发设计](开发设计.md) 中的状态、字段和接口落成可实现的契约。`PlatformSpec` 的完整规范见 [PlatformSpec v1](PlatformSpec-v1.md)，实际 Pydantic 实现位于 `auto_spider/schemas.py`。
 
 ## 1. 标识和版本
 

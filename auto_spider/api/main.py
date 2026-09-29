@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, status
 
 from auto_spider.api.deps import CurrentActor, DbSession
 from auto_spider.config import get_settings
-from auto_spider.db.models import CodeSubmission, EvidenceFile
+from auto_spider.db.models import CodeSubmission, EvidenceFile, PlatformSpec
 from auto_spider.schemas import (
     CreateBatchRequest,
     CreateBatchResponse,
@@ -87,6 +87,32 @@ def read_latest_report(task_id: str, session: DbSession, actor: CurrentActor) ->
     if report is None:
         raise HTTPException(status_code=404, detail="报告尚未生成")
     return ReportResponse.model_validate(report)
+
+
+@app.get("/api/v1/onboarding/tasks/{task_id}/specs")
+def list_specs(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
+    if get_task(session, task_id) is None:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    rows = (
+        session.query(PlatformSpec)
+        .filter(PlatformSpec.task_id == task_id)
+        .order_by(PlatformSpec.spec_version.desc())
+        .all()
+    )
+    return [
+        {
+            "task_id": row.task_id,
+            "spec_version": row.spec_version,
+            "schema_version": row.schema_version,
+            "spec_hash": row.spec_hash,
+            "status": row.status,
+            "confidence_summary": row.confidence_summary,
+            "spec": row.spec_json,
+            "evidence_manifest_ref": row.evidence_manifest_ref,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
 
 
 @app.post("/api/v1/onboarding/tasks/{task_id}/manual-runs")

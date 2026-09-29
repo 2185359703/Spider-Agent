@@ -22,6 +22,7 @@ from auto_spider.git.target import CollectorRepository
 from auto_spider.schemas import NextAction, ObservationCode, TechnicalStatus
 from auto_spider.services.evidence import EvidenceStore
 from auto_spider.services.policies import next_action_for, technical_status_for
+from auto_spider.services.spec_builder import build_fake_platform_spec
 
 from .checkpoints import CheckpointStore
 from .fakes import FakeAnalyzer, FakeCodingGateway, FakeRepairGateway
@@ -110,22 +111,33 @@ class WorkflowRunner:
         ).all()
         for old in old_specs:
             old.is_current = False
-        spec = {
-            "platform_key": task.platform_key,
-            "source_name": task.platform_name or task.platform_key,
-            "entry_url": task.entry_url,
-            "platform_id": None,
-            "entity_id": None,
-            "crawl_version": "v1.0.0",
-            "adapter_type": "custom_http",
-            "list_endpoint": analysis.list_endpoint,
-            "detail_endpoint": analysis.detail_endpoint,
-            "internship_rule": {"must_match": True},
-            "evidence_refs": [evidence.evidence_id, *analysis.evidence_refs],
-        }
+        spec_model = build_fake_platform_spec(
+            task_id=task.task_id,
+            platform_key=task.platform_key,
+            source_name=task.platform_name or task.platform_key,
+            entry_url=task.entry_url,
+            observation=analysis.observation,
+            evidence_id=evidence.evidence_id,
+        )
+        spec_model = spec_model.model_copy(
+            update={
+                "evidence": spec_model.evidence.model_copy(
+                    update={
+                        "manifest_ref": evidence.relative_path,
+                        "redaction_status": "redacted",
+                    }
+                )
+            }
+        )
+        spec_model = spec_model.with_hash()
+        spec = spec_model.model_dump(mode="json")
         spec_row = PlatformSpec(
             task_id=task.task_id,
+            schema_version=spec_model.schema_version,
             spec_version=len(old_specs) + 1,
+            spec_hash=spec_model.spec_hash or spec_model.calculated_hash(),
+            status=spec_model.status.value,
+            confidence_summary=spec_model.confidence_summary,
             spec_json=spec,
             evidence_manifest_ref=evidence.relative_path,
         )
@@ -143,8 +155,13 @@ class WorkflowRunner:
         )
 
         invalid_files = self.repairer.validate(task.platform_key, generated["changed_files"])
+        spec_errors = spec_model.candidate_blocking_errors()
         observation = ObservationCode(analysis.observation["observation_code"])
-        validation_passed = not invalid_files and observation != ObservationCode.ACCESS_RESTRICTED
+        validation_passed = (
+            not invalid_files
+            and not spec_errors
+            and observation != ObservationCode.ACCESS_RESTRICTED
+        )
         technical = technical_status_for(observation)
         if invalid_files:
             technical = TechnicalStatus.FAIL
@@ -167,6 +184,7 @@ class WorkflowRunner:
             valid_record_count=analysis.observation["valid_record_count"],
             result_json={
                 "invalid_files": invalid_files,
+                "spec_errors": spec_errors,
                 "repository": CollectorRepository().candidate_context(),
             },
         )
@@ -176,7 +194,11 @@ class WorkflowRunner:
             task,
             run,
             "run_validation",
-            {"technical_status": technical, "invalid_files": invalid_files},
+            {
+                "technical_status": technical,
+                "invalid_files": invalid_files,
+                "spec_errors": spec_errors,
+            },
         )
 
         report_id = _id()
@@ -184,6 +206,10 @@ class WorkflowRunner:
             "task_id": task.task_id,
             "run_id": run.run_id,
             "report_version": task.policy_version,
+            "spec_revision": spec_model.spec_revision,
+            "spec_hash": spec_model.spec_hash,
+            "spec_status": spec_model.status,
+            "confidence_summary": spec_model.confidence_summary,
             "observation_code": observation,
             "technical_status": technical,
             "next_action": next_action,
@@ -205,7 +231,7 @@ class WorkflowRunner:
                 "business_status": validation.business_status,
             },
             "evidence_refs": [evidence.evidence_id],
-            "unresolved": invalid_files,
+            "unresolved": [*invalid_files, *spec_errors],
             "simulated": True,
         }
         report = OnboardingReport(

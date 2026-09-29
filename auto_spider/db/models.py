@@ -78,7 +78,11 @@ class PlatformSpec(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[str] = mapped_column(ForeignKey("onboarding_tasks.task_id"), index=True)
+    schema_version: Mapped[str] = mapped_column(String(20), default="1.0")
     spec_version: Mapped[int] = mapped_column(Integer)
+    spec_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(30), default="DRAFT")
+    confidence_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     spec_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     evidence_manifest_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     is_current: Mapped[bool] = mapped_column(Boolean, default=True)
