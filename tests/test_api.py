@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from auto_spider.api.deps import get_session
 from auto_spider.api.main import app
 from auto_spider.db.models import (
+    CodeSubmission,
     FailureBundle,
     ManualReview,
     ManualRun,
@@ -12,6 +13,7 @@ from auto_spider.db.models import (
     OnboardingReport,
     OnboardingTask,
     PlatformSpec,
+    PolicyVersion,
     RepairRun,
     WorkflowEvent,
     WorkflowRun,
@@ -161,7 +163,39 @@ def test_task_history_endpoints_return_manual_review_and_repair_data(db_session)
         idempotency_key="task-history-0001:report",
         payload_json={"observation_code": "INTERNSHIPS_FOUND"},
     )
-    db_session.add_all([batch, task, run, manual, review, bundle_row, repair, event])
+    manual.result_json = {
+        "sample_count": 1,
+        "samples": [
+            {
+                "source_id": "job-1",
+                "title": "实习岗位",
+                "source_url": "https://example.com/jobs/1",
+                "description": "岗位描述",
+                "cookie": "must-not-leak",
+            }
+        ],
+    }
+    submission = CodeSubmission(
+        submission_id="submission-history-0001",
+        task_id=task.task_id,
+        run_id=run.run_id,
+        branch_name="ai/onboarding/example/task-history-0001",
+        commit_sha="abc123",
+        baseline_ref="base123",
+        changed_files=["collectors/example.py"],
+        adoption_status="candidate",
+        simulated=True,
+    )
+    policy = PolicyVersion(
+        name="report",
+        version="report-v1",
+        status="published",
+        policy_json={"observation_codes": ["INTERNSHIPS_FOUND"]},
+        created_by="tester",
+    )
+    db_session.add_all(
+        [batch, task, run, manual, review, bundle_row, repair, event, submission, policy]
+    )
     db_session.commit()
 
     def override_session():
@@ -179,5 +213,18 @@ def test_task_history_endpoints_return_manual_review_and_repair_data(db_session)
         assert review_body[0]["review_id"] == review.review_id
         assert repair_body[0]["repair_run_id"] == repair.repair_run_id
         assert failure_body[0]["bundle_id"] == bundle_row.bundle_id
+        samples = client.get(f"/api/v1/onboarding/tasks/{task.task_id}/samples").json()
+        assert samples["count"] == 1
+        assert samples["samples"][0]["title"] == "实习岗位"
+        assert samples["samples"][0]["extra"]["cookie"] == "[REDACTED]"
+        assert client.get("/api/v1/onboarding/samples").json()[0]["task_id"] == task.task_id
+        submissions = client.get("/api/v1/onboarding/submissions").json()
+        assert submissions[0]["submission_id"] == submission.submission_id
+        filtered_submissions = client.get(
+            "/api/v1/onboarding/submissions?adoption_status=candidate"
+        ).json()
+        assert filtered_submissions[0]["submission_id"] == submission.submission_id
+        assert client.get("/api/v1/policies").json()[0]["version"] == "report-v1"
+        assert client.get("/api/v1/system/repositories").status_code == 200
     finally:
         app.dependency_overrides.clear()

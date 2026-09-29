@@ -75,6 +75,81 @@ export interface Submission {
   simulated: boolean;
 }
 
+export interface GlobalSubmission extends Submission {
+  task_id: string;
+  platform_key: string;
+  platform_name?: string | null;
+  entry_url: string;
+  submission_type?: string;
+  created_at: string;
+  adopted_at?: string | null;
+}
+
+export interface SampleRecord {
+  sample_index: number;
+  source_id?: string | number | null;
+  title?: string | null;
+  source_url?: string | null;
+  location?: string | null;
+  description?: string | null;
+  requirements?: string | null;
+  publish_time?: string | null;
+  department?: string | null;
+  employment_type?: string | null;
+  job_type?: string | null;
+  apply_url?: string | null;
+  position?: string | null;
+  extra: Record<string, unknown>;
+}
+
+export interface SampleBundle {
+  manual_run: {
+    manual_run_id: string;
+    code_revision: string;
+    status: string;
+    created_at: string;
+  } | null;
+  count: number;
+  samples: SampleRecord[];
+}
+
+export interface GlobalSample extends SampleRecord {
+  task_id: string;
+  platform_key: string;
+  platform_name?: string | null;
+  entry_url: string;
+  manual_run_id: string;
+  code_revision: string;
+}
+
+export interface PolicyVersion {
+  name: string;
+  version: string;
+  status: string;
+  policy: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+}
+
+export interface RepositoryStatus {
+  path: string;
+  remote_configured?: boolean;
+  remote_url?: string;
+  push_enabled?: boolean;
+  baseline_ref?: string;
+  head?: string | null;
+  dirty_files?: string[];
+  is_git_repository?: boolean;
+  baseline_available?: boolean;
+  error?: string;
+}
+
+export interface RepositoryStatusBundle {
+  control_plane: RepositoryStatus;
+  source: RepositoryStatus;
+  aicoding: RepositoryStatus;
+}
+
 export interface SpecSnapshot {
   spec_version: number;
   schema_version: string;
@@ -180,6 +255,7 @@ export interface TaskBundle {
   reviews: ManualReview[];
   repairs: RepairRun[];
   failures: FailureBundle[];
+  samples: SampleBundle;
 }
 
 export interface CreateBatchRequest {

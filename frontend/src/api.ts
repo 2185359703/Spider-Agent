@@ -1,5 +1,5 @@
 import { mockBundle, mockTasks } from "./mock";
-import type { CreateBatchRequest, SubmissionDiff, Task, TaskBundle } from "./types";
+import type { CreateBatchRequest, GlobalSample, GlobalSubmission, PolicyVersion, RepositoryStatusBundle, SubmissionDiff, Task, TaskBundle } from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
@@ -19,7 +19,7 @@ export async function listTasks(): Promise<Task[]> {
 
 export async function getTaskBundle(taskId: string): Promise<TaskBundle> {
   if (!API_BASE) return { ...mockBundle, task: mockTasks.find((task) => task.task_id === taskId) ?? mockBundle.task };
-  const [task, report, specs, submissions, evidence, validation, timeline, manualRuns, reviews, repairs, failures] = await Promise.all([
+  const [task, report, specs, submissions, evidence, validation, timeline, manualRuns, reviews, repairs, failures, samples] = await Promise.all([
     request<Task>(`/api/v1/onboarding/tasks/${taskId}`),
     request<TaskBundle["report"]>(`/api/v1/onboarding/tasks/${taskId}/reports/latest`).catch(() => null),
     request<TaskBundle["specs"]>(`/api/v1/onboarding/tasks/${taskId}/specs`),
@@ -31,8 +31,54 @@ export async function getTaskBundle(taskId: string): Promise<TaskBundle> {
     request<TaskBundle["reviews"]>(`/api/v1/onboarding/tasks/${taskId}/reviews`).catch(() => []),
     request<TaskBundle["repairs"]>(`/api/v1/onboarding/tasks/${taskId}/repairs`).catch(() => []),
     request<TaskBundle["failures"]>(`/api/v1/onboarding/tasks/${taskId}/failures`).catch(() => []),
+    request<TaskBundle["samples"]>(`/api/v1/onboarding/tasks/${taskId}/samples`).catch(() => ({ manual_run: null, count: 0, samples: [] })),
   ]);
-  return { task, report, specs, submissions, evidence, validation, timeline, manualRuns, reviews, repairs, failures };
+  return { task, report, specs, submissions, evidence, validation, timeline, manualRuns, reviews, repairs, failures, samples };
+}
+
+export async function listAllSubmissions(): Promise<GlobalSubmission[]> {
+  if (!API_BASE) {
+    return mockBundle.submissions.map((submission) => ({
+      ...submission,
+      task_id: mockBundle.task.task_id,
+      platform_key: mockBundle.task.platform_key,
+      platform_name: mockBundle.task.platform_name,
+      entry_url: mockBundle.task.entry_url,
+      created_at: mockBundle.task.updated_at,
+    }));
+  }
+  return request<GlobalSubmission[]>("/api/v1/onboarding/submissions");
+}
+
+export async function listAllSamples(): Promise<GlobalSample[]> {
+  if (!API_BASE) {
+    return mockBundle.samples.samples.map((sample) => ({
+      ...sample,
+      task_id: mockBundle.task.task_id,
+      platform_key: mockBundle.task.platform_key,
+      platform_name: mockBundle.task.platform_name,
+      entry_url: mockBundle.task.entry_url,
+      manual_run_id: "manual-demo",
+      code_revision: "e2159d7853542380ae0f80ae1a3220fd6a1bc139",
+    }));
+  }
+  return request<GlobalSample[]>("/api/v1/onboarding/samples");
+}
+
+export async function listPolicies(): Promise<PolicyVersion[]> {
+  if (!API_BASE) return [];
+  return request<PolicyVersion[]>("/api/v1/policies");
+}
+
+export async function getRepositoryStatus(): Promise<RepositoryStatusBundle> {
+  if (!API_BASE) {
+    return {
+      control_plane: { path: "D:/Project/Auto_spider", remote_configured: false, push_enabled: false },
+      source: { path: "D:/Project/Auto_spider_repositories/fun-crawler-v2", baseline_ref: "16cba84", is_git_repository: true, baseline_available: true, dirty_files: [] },
+      aicoding: { path: "D:/Project/Auto_spider_repositories/aicoding-auto_spider", remote_url: "https://gitee.com/daxia-com/auto_spider.git", push_enabled: true, is_git_repository: true, dirty_files: [] },
+    };
+  }
+  return request<RepositoryStatusBundle>("/api/v1/system/repositories");
 }
 
 export async function getSubmissionDiff(taskId: string, submissionId: string): Promise<SubmissionDiff> {

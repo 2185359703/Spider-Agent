@@ -306,6 +306,8 @@ erDiagram
 | POST | `/api/v1/onboarding/batches` | 批量创建 URL 任务 |
 | GET | `/api/v1/onboarding/batches` | 查询最近批次 |
 | GET | `/api/v1/onboarding/batches/{batch_id}` | 查询批量汇总 |
+| GET | `/api/v1/onboarding/submissions` | 查询全局候选提交 |
+| GET | `/api/v1/onboarding/samples` | 查询全局人工运行样本 |
 | GET | `/api/v1/onboarding/tasks/{task_id}` | 查询任务和下一步 |
 | GET | `/api/v1/onboarding/tasks/{task_id}/timeline` | 查询工作流事件和轮次 |
 | POST | `/api/v1/onboarding/tasks/{task_id}/resume` | 补充信息并恢复 |
@@ -315,6 +317,7 @@ erDiagram
 | GET | `/api/v1/onboarding/tasks/{task_id}/submissions` | 查询候选提交 |
 | POST | `/api/v1/onboarding/tasks/{task_id}/manual-runs` | 登记人工运行 |
 | GET | `/api/v1/onboarding/tasks/{task_id}/manual-runs` | 查询人工运行历史 |
+| GET | `/api/v1/onboarding/tasks/{task_id}/samples` | 查询任务采集样本 |
 | POST | `/api/v1/onboarding/tasks/{task_id}/reviews` | 提交人工审查 |
 | GET | `/api/v1/onboarding/tasks/{task_id}/reviews` | 查询审查历史 |
 | POST | `/api/v1/onboarding/tasks/{task_id}/repair` | 触发修复 |
@@ -323,6 +326,7 @@ erDiagram
 | GET | `/api/v1/onboarding/tasks/{task_id}/evidence` | 查询证据索引 |
 | GET | `/api/v1/onboarding/tasks/{task_id}/submissions/{submission_id}/diff` | 获取候选差异 |
 | GET | `/api/v1/onboarding/evidence/{evidence_id}/download` | 下载单个证据文件 |
+| GET | `/api/v1/system/repositories` | 查询三个仓库边界和本地状态 |
 | GET | `/api/v1/policies` | 查询规则版本 |
 | POST | `/api/v1/policies/preview` | 用样本预览规则 |
 | POST | `/api/v1/policies` | 发布规则，管理员 |

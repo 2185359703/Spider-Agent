@@ -153,4 +153,30 @@ export const mockBundle: TaskBundle = {
   reviews: [],
   repairs: [],
   failures: [],
+  samples: {
+    manual_run: null,
+    count: 2,
+    samples: [
+      {
+        sample_index: 1,
+        source_id: "11301",
+        title: "【留用实习】策略产品经理-商业化方向",
+        source_url: "https://campus.example.com/jobs/11301",
+        location: "北京",
+        description: "负责产品分析与方案设计。",
+        requirements: "每周实习四天。",
+        extra: {},
+      },
+      {
+        sample_index: 2,
+        source_id: "11302",
+        title: "【留用实习】策略运营-分析",
+        source_url: "https://campus.example.com/jobs/11302",
+        location: "北京",
+        description: "参与业务数据分析。",
+        requirements: "熟悉常用分析工具。",
+        extra: {},
+      },
+    ],
+  },
 };

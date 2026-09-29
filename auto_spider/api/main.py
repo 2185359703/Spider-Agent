@@ -19,10 +19,12 @@ from auto_spider.db.models import (
     OnboardingBatch,
     OnboardingTask,
     PlatformSpec,
+    PolicyVersion,
     RepairRun,
     WorkflowEvent,
     WorkflowRun,
 )
+from auto_spider.git.target import CollectorRepository
 from auto_spider.schemas import (
     CreateBatchRequest,
     CreateBatchResponse,
@@ -33,6 +35,7 @@ from auto_spider.schemas import (
     ResumeRequest,
     TaskResponse,
 )
+from auto_spider.services.evidence import sanitize
 from auto_spider.services.tasks import (
     create_batch,
     create_manual_run,
@@ -98,6 +101,64 @@ def _git_output(repository: Path, *args: str, timeout: int = 20) -> tuple[int, s
     return result.returncode, result.stdout, result.stderr
 
 
+def _sample_rows(result_json: dict) -> list[dict]:
+    raw_samples = result_json.get("samples", []) if isinstance(result_json, dict) else []
+    if not isinstance(raw_samples, list):
+        return []
+    known_fields = {
+        "source_id",
+        "title",
+        "source_url",
+        "location",
+        "description",
+        "requirements",
+        "publish_time",
+        "department",
+        "employment_type",
+        "job_type",
+        "apply_url",
+        "position",
+    }
+    rows: list[dict] = []
+    for index, item in enumerate(raw_samples, start=1):
+        if not isinstance(item, dict):
+            continue
+        safe_item = sanitize(item)
+        rows.append(
+            {
+                "sample_index": index,
+                **{field: safe_item.get(field) for field in known_fields},
+                "extra": {
+                    key: value for key, value in safe_item.items() if key not in known_fields
+                },
+            }
+        )
+    return rows
+
+
+def _repository_payload(repository: CollectorRepository) -> dict:
+    try:
+        inspection = repository.inspect()
+        return {
+            "path": str(inspection.path),
+            "baseline_ref": inspection.baseline_ref,
+            "head": inspection.head,
+            "dirty_files": list(inspection.dirty_files),
+            "is_git_repository": inspection.is_git_repository,
+            "baseline_available": inspection.baseline_available,
+        }
+    except (OSError, RuntimeError) as exc:
+        return {
+            "path": str(repository.path),
+            "baseline_ref": repository.baseline_ref,
+            "head": None,
+            "dirty_files": [],
+            "is_git_repository": False,
+            "baseline_available": False,
+            "error": str(exc),
+        }
+
+
 @app.get("/api/v1/onboarding/batches")
 def list_onboarding_batches(
     session: DbSession,
@@ -146,6 +207,114 @@ def read_onboarding_batch(batch_id: str, session: DbSession, actor: CurrentActor
             "updated_at": batch.updated_at,
         },
         "tasks": [TaskResponse.model_validate(task) for task in tasks],
+    }
+
+
+@app.get("/api/v1/onboarding/submissions")
+def list_all_submissions(
+    session: DbSession,
+    actor: CurrentActor,
+    adoption_status: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+) -> list[dict]:
+    statement = (
+        select(CodeSubmission, OnboardingTask)
+        .join(OnboardingTask, CodeSubmission.task_id == OnboardingTask.task_id)
+        .order_by(CodeSubmission.created_at.desc())
+    )
+    if adoption_status:
+        statement = statement.where(CodeSubmission.adoption_status == adoption_status)
+    statement = statement.limit(limit)
+    return [
+        {
+            "submission_id": submission.submission_id,
+            "task_id": submission.task_id,
+            "platform_key": task.platform_key,
+            "platform_name": task.platform_name,
+            "entry_url": task.entry_url,
+            "run_id": submission.run_id,
+            "branch_name": submission.branch_name,
+            "commit_sha": submission.commit_sha,
+            "baseline_ref": submission.baseline_ref,
+            "changed_files": submission.changed_files,
+            "submission_type": submission.submission_type,
+            "adoption_status": submission.adoption_status,
+            "simulated": submission.simulated,
+            "created_at": submission.created_at,
+            "adopted_at": submission.adopted_at,
+        }
+        for submission, task in session.execute(statement).all()
+    ]
+
+
+@app.get("/api/v1/onboarding/samples")
+def list_all_samples(
+    session: DbSession,
+    actor: CurrentActor,
+    limit: int = Query(default=500, ge=1, le=2000),
+) -> list[dict]:
+    rows = session.execute(
+        select(ManualRun, OnboardingTask)
+        .join(OnboardingTask, ManualRun.task_id == OnboardingTask.task_id)
+        .order_by(ManualRun.created_at.desc())
+        .limit(200)
+    ).all()
+    flattened: list[dict] = []
+    for run, task in rows:
+        for sample in _sample_rows(run.result_json):
+            flattened.append(
+                {
+                    "task_id": task.task_id,
+                    "platform_key": task.platform_key,
+                    "platform_name": task.platform_name,
+                    "entry_url": task.entry_url,
+                    "manual_run_id": run.manual_run_id,
+                    "code_revision": run.code_revision,
+                    **sample,
+                }
+            )
+            if len(flattened) >= limit:
+                return flattened
+    return flattened
+
+
+@app.get("/api/v1/policies")
+def list_policy_versions(
+    session: DbSession,
+    actor: CurrentActor,
+    limit: int = Query(default=100, ge=1, le=200),
+) -> list[dict]:
+    rows = session.scalars(
+        select(PolicyVersion).order_by(PolicyVersion.created_at.desc()).limit(limit)
+    ).all()
+    return [
+        {
+            "name": row.name,
+            "version": row.version,
+            "status": row.status,
+            "policy": row.policy_json,
+            "created_by": row.created_by,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
+
+
+@app.get("/api/v1/system/repositories")
+def repository_status(session: DbSession, actor: CurrentActor) -> dict:
+    settings = get_settings()
+    return {
+        "control_plane": {
+            "path": str(Path.cwd()),
+            "remote_configured": False,
+            "push_enabled": False,
+        },
+        "source": _repository_payload(CollectorRepository.source_repository()),
+        "aicoding": {
+            **_repository_payload(CollectorRepository()),
+            "remote_url": settings.aicoding_remote_url,
+            "push_enabled": settings.aicoding_push_enabled,
+        },
     }
 
 
@@ -300,6 +469,44 @@ def list_manual_runs(task_id: str, session: DbSession, actor: CurrentActor) -> l
         }
         for row in rows
     ]
+
+
+@app.get("/api/v1/onboarding/tasks/{task_id}/samples")
+def list_task_samples(
+    task_id: str,
+    session: DbSession,
+    actor: CurrentActor,
+    manual_run_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+) -> dict:
+    _require_task(session, task_id)
+    if manual_run_id:
+        run = session.scalar(
+            select(ManualRun).where(
+                ManualRun.task_id == task_id,
+                ManualRun.manual_run_id == manual_run_id,
+            )
+        )
+    else:
+        run = session.scalar(
+            select(ManualRun)
+            .where(ManualRun.task_id == task_id)
+            .order_by(ManualRun.created_at.desc())
+            .limit(1)
+        )
+    if run is None:
+        return {"manual_run": None, "count": 0, "samples": []}
+    samples = _sample_rows(run.result_json)[:limit]
+    return {
+        "manual_run": {
+            "manual_run_id": run.manual_run_id,
+            "code_revision": run.code_revision,
+            "status": run.status,
+            "created_at": run.created_at,
+        },
+        "count": len(samples),
+        "samples": samples,
+    }
 
 
 @app.post("/api/v1/onboarding/tasks/{task_id}/reviews")
