@@ -25,6 +25,14 @@
 
 原有 `思路流程.md` 和 `mermaid-diagram.png` 保留。本文档中出现的模块、接口、目录和命令除明确注明“已核对”外，均是待实现设计。
 
+## 三个仓库的边界
+
+本地控制面 `D:\Project\Auto_spider` 只保存 AI 编排、数据库、验证器和运行记录，不配置远程仓库，也不推送自身代码。
+
+采集代码源仓库是 `D:\Project\Auto_spider_repositories\fun-crawler-v2`，当前基线为 `16cba8439396e371973e4ee0301d3a88f2f32ba5`，只作为实验输入和只读参考。
+
+AI 产出仓库是 `D:\Project\Auto_spider_repositories\aicoding-auto_spider`，对应 `https://gitee.com/daxia-com/auto_spider.git`。AI 生成或修复的采集器只在这个仓库创建候选分支、提交和推送；不得修改 `C:\Users\ASUS\Desktop\jichu-v5-sync`。
+
 ## 本地 `.env` 配置
 
 先复制 `.env.example` 为 `.env`。使用自定义 OpenAI 兼容接口时，至少填写：

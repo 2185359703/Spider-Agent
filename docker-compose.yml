@@ -36,7 +36,8 @@ services:
     environment:
       DATABASE_URL: mysql+pymysql://auto_spider:auto_spider@mysql:3306/auto_spider?charset=utf8mb4
       REDIS_URL: redis://redis:6379/0
-      COLLECTOR_REPO_PATH: /srv/collector-catalog
+      COLLECTOR_SOURCE_REPO_PATH: /srv/collector-source
+      AICODING_REPO_PATH: /srv/aicoding-collector
       EVIDENCE_ROOT: /srv/auto_spider/evidence
       WORKTREE_ROOT: /srv/auto_spider/worktrees
       OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
@@ -65,7 +66,8 @@ services:
     environment:
       DATABASE_URL: mysql+pymysql://auto_spider:auto_spider@mysql:3306/auto_spider?charset=utf8mb4
       REDIS_URL: redis://redis:6379/0
-      COLLECTOR_REPO_PATH: /srv/collector-catalog
+      COLLECTOR_SOURCE_REPO_PATH: /srv/collector-source
+      AICODING_REPO_PATH: /srv/aicoding-collector
       EVIDENCE_ROOT: /srv/auto_spider/evidence
       WORKTREE_ROOT: /srv/auto_spider/worktrees
       OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
@@ -78,7 +80,8 @@ services:
     volumes:
       - ./evidence:/srv/auto_spider/evidence
       - ./worktrees:/srv/auto_spider/worktrees
-      - ${COLLECTOR_REPO_HOST_PATH:-.}:/srv/collector-catalog:ro
+      - ${COLLECTOR_SOURCE_REPO_HOST_PATH:-.}:/srv/collector-source:ro
+      - ${AICODING_REPO_HOST_PATH:-.}:/srv/aicoding-collector
     depends_on:
       mysql:
         condition: service_healthy

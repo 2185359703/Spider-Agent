@@ -271,6 +271,9 @@ class WorkflowRunner:
             "internship_count": analysis.observation["internship_count"],
             "valid_record_count": analysis.observation["valid_record_count"],
             "missing_publish_time_count": 0,
+            "candidate_commit": generated.get("commit_sha"),
+            "candidate_branch": generated.get("branch_name"),
+            "push_status": generated.get("push_status", "DISABLED"),
             "validation": {
                 "compile_status": generated_validation.get("compile_status", "NOT_RUN"),
                 "pytest_status": validation.pytest_status,
@@ -280,7 +283,7 @@ class WorkflowRunner:
             },
             "evidence_refs": [evidence.evidence_id],
             "unresolved": [*invalid_files, *spec_errors],
-            "simulated": True,
+            "simulated": generated.get("simulated", True),
         }
         report = OnboardingReport(
             report_id=report_id,

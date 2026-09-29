@@ -64,7 +64,7 @@ class OpenHandsGateway:
         agent = get_default_agent(llm=llm, cli_mode=True)
         workspace_config: dict[str, str] = {
             "host": self.server_url,
-            "working_dir": str(workspace),
+            "working_dir": self._remote_workspace_path(workspace),
         }
         if self.session_api_key:
             workspace_config["api_key"] = self.session_api_key
@@ -87,6 +87,17 @@ class OpenHandsGateway:
             changed_files=[],
             simulated=False,
         )
+
+    @staticmethod
+    def _remote_workspace_path(workspace: Path) -> str:
+        settings = get_settings()
+        local_root = settings.worktree_root.resolve()
+        resolved = workspace.resolve()
+        try:
+            relative = resolved.relative_to(local_root)
+        except ValueError:
+            return str(workspace)
+        return f"{settings.openhands_workspace_root.rstrip('/')}/{relative.as_posix()}"
 
     @staticmethod
     def _final_response(conversation: object, message_event_type: type) -> str:

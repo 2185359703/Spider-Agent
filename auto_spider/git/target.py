@@ -18,16 +18,29 @@ class RepositoryInspection:
 
 
 class CollectorRepository:
-    """Read-only inspection of the existing collector repository.
+    """Inspection of the AI output repository used for candidate worktrees.
 
-    Candidate worktrees are intentionally disabled until a real OpenHands gateway
-    supplies a change set and an explicit worker policy enables mutation.
+    The source repository is kept separate and is exposed through
+    ``source_repository`` for read-only comparison and evidence.
     """
 
     def __init__(self, path: Path | None = None, baseline_ref: str | None = None) -> None:
         settings = get_settings()
-        self.path = Path(path or settings.collector_repo_path)
+        self.path = Path(
+            path
+            or settings.aicoding_repo_path
+            or settings.collector_repo_path
+            or settings.collector_source_repo_path
+        )
         self.baseline_ref = baseline_ref or settings.collector_baseline_ref
+
+    @classmethod
+    def source_repository(cls) -> CollectorRepository:
+        settings = get_settings()
+        return cls(
+            path=settings.collector_source_repo_path,
+            baseline_ref=settings.collector_baseline_ref,
+        )
 
     def _git(self, *args: str) -> str:
         result = subprocess.run(
@@ -83,8 +96,12 @@ class CollectorRepository:
 
     def candidate_context(self) -> dict[str, object]:
         inspection = self.inspect()
+        settings = get_settings()
         return {
             "path": str(inspection.path),
+            "source_repository_path": str(settings.collector_source_repo_path),
+            "aicoding_repository_path": str(settings.aicoding_repo_path),
+            "aicoding_remote_url": settings.aicoding_remote_url,
             "baseline_ref": inspection.baseline_ref,
             "head": inspection.head,
             "dirty_files": list(inspection.dirty_files),

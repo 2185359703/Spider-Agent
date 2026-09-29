@@ -138,12 +138,13 @@ def validate_candidate(
 ) -> CandidateValidation:
     collector_rel = f"collectors/{platform_key}.py"
     test_rel = f"tests/test_{platform_key}.py"
+    python_executable = os.getenv("VALIDATION_PYTHON") or sys.executable
     pytest_check = _run_command(
-        [sys.executable, "-m", "pytest", test_rel, "-q"],
+        [python_executable, "-m", "pytest", test_rel, "-q"],
         worktree,
     )
     compile_check = _run_command(
-        [sys.executable, "-m", "compileall", "-q", collector_rel],
+        [python_executable, "-m", "compileall", "-q", collector_rel],
         worktree,
     )
     ruff_executable = shutil.which("ruff")

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from auto_spider.ai.openhands_gateway import OpenHandsGateway
+from auto_spider.config import get_settings
 from auto_spider.git.policy import validate_changed_files
 from auto_spider.git.worktree import WorktreeManager
 from auto_spider.validators.candidate import validate_candidate
@@ -50,11 +51,14 @@ class OpenHandsRepairGateway:
         if not validation.passed:
             raise RuntimeError(f"REPAIR_VALIDATION_FAILED: {validation.as_dict()}")
         commit_sha = self._commit(context.path, platform_key, changed_files)
+        branch_name = f"ai/repair/{platform_key}/{task_id}"
+        push_status = self._push_candidate(branch_name)
         return {
             "changed_files": changed_files,
             "commit_sha": commit_sha,
             "baseline_ref": base_ref,
-            "branch_name": f"ai/repair/{platform_key}/{task_id}",
+            "branch_name": branch_name,
+            "push_status": push_status,
             "agent_response": result.final_response,
             "validation": validation.as_dict(),
             "simulated": False,
@@ -137,3 +141,32 @@ class OpenHandsRepairGateway:
             encoding="utf-8",
         )
         return result.stdout.strip()
+
+    def _push_candidate(self, branch_name: str) -> str:
+        settings = get_settings()
+        if not settings.aicoding_push_enabled:
+            return "DISABLED"
+        remote = subprocess.run(
+            ["git", "-C", str(self.worktrees.repository.path), "remote", "get-url", "origin"],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        ).stdout.strip()
+        if remote.rstrip("/") != settings.aicoding_remote_url.rstrip("/"):
+            raise RuntimeError("AICODING_REMOTE_MISMATCH")
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.worktrees.repository.path),
+                "push",
+                "origin",
+                f"HEAD:refs/heads/{branch_name}",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        return "PUSHED"
