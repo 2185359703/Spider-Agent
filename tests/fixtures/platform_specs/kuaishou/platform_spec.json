@@ -3,7 +3,7 @@
   "schema_version": "1.0",
   "spec_id": "spec-fixture-kuaishou",
   "spec_revision": 1,
-  "spec_hash": "163df411c4e966f111bbc0e76950a4b001fb9df5b0de771ebd297befe6cabe09",
+  "spec_hash": "6a49219b1ddc861385f42a41d33518085339745761ce11a1e6cc4cb480f4d7d6",
   "task_id": "fixture-kuaishou",
   "platform_key": "kuaishou",
   "source_name": "快手",
@@ -68,6 +68,7 @@
           "tests/fixtures/platform_specs/kuaishou/list-response.json"
         ]
       },
+      "decode": null,
       "evidence_refs": [
         "tests/fixtures/platform_specs/kuaishou/list-request.json",
         "tests/fixtures/platform_specs/kuaishou/list-response.json"
@@ -82,6 +83,7 @@
       "body": {},
       "response_format": "json",
       "items_selector": null,
+      "decode": null,
       "evidence_refs": [
         "tests/fixtures/platform_specs/kuaishou/detail-response.json"
       ],

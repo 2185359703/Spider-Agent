@@ -5,6 +5,8 @@ from pydantic import ValidationError
 
 from auto_spider.schemas import (
     Confidence,
+    DecodeMode,
+    DecodeSpec,
     IdentitySpec,
     PaginationMode,
     PaginationSpec,
@@ -85,3 +87,15 @@ def test_inferred_selector_requires_reason() -> None:
             confidence=Confidence.MEDIUM,
             inferred=True,
         )
+
+
+def test_opaque_response_requires_decoder_helper() -> None:
+    selector = SelectorSpec(
+        source=SelectorSource.RESPONSE_BODY,
+        kind=SelectorKind.JSON_PATH,
+        expression="$.data",
+        confidence=Confidence.HIGH,
+        evidence_refs=["evidence-mokahr-list"],
+    )
+    with pytest.raises(ValidationError):
+        DecodeSpec(mode=DecodeMode.OPAQUE, input_selector=selector, helper_required=True)

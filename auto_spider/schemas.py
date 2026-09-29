@@ -56,6 +56,14 @@ class ResponseFormat(StrEnum):
     TEXT = "text"
 
 
+class DecodeMode(StrEnum):
+    NONE = "none"
+    JSON_FIELD = "json_field"
+    BASE64 = "base64"
+    OPAQUE = "opaque"
+    CUSTOM_HELPER = "custom_helper"
+
+
 class SelectorKind(StrEnum):
     JSON_PATH = "json_path"
     CSS = "css"
@@ -162,9 +170,31 @@ class EndpointSpec(PlatformSpecModel):
     body: dict[str, Any] = Field(default_factory=dict)
     response_format: ResponseFormat = ResponseFormat.JSON
     items_selector: SelectorSpec | None = None
+    decode: DecodeSpec | None = None
     evidence_refs: list[str] = Field(default_factory=list)
     confidence: Confidence = Confidence.LOW
     inferred: bool = False
+
+
+class DecodeSpec(PlatformSpecModel):
+    mode: DecodeMode = DecodeMode.NONE
+    input_selector: SelectorSpec | None = None
+    encoding: str | None = None
+    algorithm: str | None = None
+    key_source: str | None = None
+    helper_required: bool = False
+    helper_entrypoint: str | None = None
+    evidence_refs: list[str] = Field(default_factory=list)
+    confidence: Confidence = Confidence.LOW
+    inferred: bool = False
+
+    @model_validator(mode="after")
+    def check_decode(self) -> DecodeSpec:
+        if self.mode != DecodeMode.NONE and self.input_selector is None:
+            raise ValueError("非 none 解码模式必须提供 input_selector")
+        if self.helper_required and not self.helper_entrypoint:
+            raise ValueError("helper_required=true 时必须提供 helper_entrypoint")
+        return self
 
 
 class EndpointsSpec(PlatformSpecModel):
@@ -415,6 +445,13 @@ class PlatformSpec(PlatformSpecModel):
         errors: list[str] = []
         if self.endpoints.list is None:
             errors.append("missing_list_endpoint")
+        for endpoint_name, endpoint in (
+            ("list", self.endpoints.list),
+            ("detail", self.endpoints.detail),
+        ):
+            if endpoint is not None and endpoint.decode is not None:
+                if endpoint.decode.helper_required and not endpoint.decode.helper_entrypoint:
+                    errors.append(f"missing_{endpoint_name}_response_decoder")
         if self.validation.detail_required and self.endpoints.detail is None:
             errors.append("missing_detail_endpoint")
         if self.validation.pagination_required and self.pagination.mode != PaginationMode.NONE:
@@ -435,6 +472,8 @@ class PlatformSpec(PlatformSpecModel):
 
 
 SelectorSpec.model_rebuild()
+EndpointSpec.model_rebuild()
+PlatformSpec.model_rebuild()
 
 
 class ObservationCode(StrEnum):
