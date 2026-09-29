@@ -24,6 +24,7 @@ from auto_spider.services.evidence import EvidenceStore
 from auto_spider.services.policies import next_action_for, technical_status_for
 from auto_spider.services.spec_builder import build_fake_platform_spec
 
+from .browser_analyzer import BrowserAnalyzer
 from .checkpoints import CheckpointStore
 from .fakes import FakeAnalyzer, FakeCodingGateway, FakeRepairGateway
 
@@ -43,7 +44,12 @@ class WorkflowRunner:
         coder: FakeCodingGateway | None = None,
         repairer: FakeRepairGateway | None = None,
     ) -> None:
-        self.analyzer = analyzer or FakeAnalyzer()
+        if analyzer is not None:
+            self.analyzer = analyzer
+        else:
+            self.analyzer = (
+                BrowserAnalyzer() if get_settings().analysis_mode == "browser" else FakeAnalyzer()
+            )
         self.coder = coder or FakeCodingGateway()
         self.repairer = repairer or FakeRepairGateway()
         self.checkpoints = CheckpointStore()
@@ -83,7 +89,12 @@ class WorkflowRunner:
         task.status = "ANALYZING"
         self._checkpoint(session, task, run, "normalize_input", {"task_id": task_id})
 
-        analysis = self.analyzer.inspect(task.entry_url, task.platform_key)
+        analysis = self.analyzer.inspect(
+            task.entry_url,
+            task.platform_key,
+            task.task_id,
+            run.run_id,
+        )
         evidence = self.evidence.write_json(
             session,
             task_id=task.task_id,

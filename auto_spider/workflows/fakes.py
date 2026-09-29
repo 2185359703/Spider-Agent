@@ -18,7 +18,13 @@ class FakeAnalysis:
 class FakeAnalyzer:
     """Deterministic analyzer used for the first workflow milestone and tests."""
 
-    def inspect(self, entry_url: str, platform_key: str) -> FakeAnalysis:
+    def inspect(
+        self,
+        entry_url: str,
+        platform_key: str,
+        task_id: str | None = None,
+        run_id: str | None = None,
+    ) -> FakeAnalysis:
         observation = classify_observation(entry_url)
         found = observation["list_found"] is True
         return FakeAnalysis(

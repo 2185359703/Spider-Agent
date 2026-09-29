@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
 
 
 SECRET_QUERY_KEYS = re.compile(
-    r"(token|signature|signature|csrf|session|password|secret|auth|code)",
+    r"(^|_)(token|signature|csrf|session|password|secret|auth)($|_)",
     re.IGNORECASE,
 )
 SECRET_HEADER_KEYS = re.compile(
