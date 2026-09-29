@@ -579,6 +579,7 @@ def list_reviews(task_id: str, session: DbSession, actor: CurrentActor) -> list[
             "sample_count": row.sample_count,
             "issue_summary": row.issue_summary,
             "field_issues": row.issue_details or [],
+            "sample_decisions": row.sample_decisions or [],
             "evidence_refs": row.evidence_refs,
             "created_at": row.created_at,
         }

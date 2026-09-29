@@ -163,6 +163,9 @@ def create_review(
         sample_count=request.sample_count,
         issue_summary=request.issue_summary,
         issue_details=[issue.model_dump(mode="json") for issue in request.field_issues],
+        sample_decisions=[
+            decision.model_dump(mode="json") for decision in request.sample_decisions
+        ],
         evidence_refs=request.evidence_refs,
     )
     session.add(review)
@@ -195,6 +198,9 @@ def create_review(
             bundle_json={
                 "issue_summary": request.issue_summary,
                 "field_issues": [issue.model_dump(mode="json") for issue in request.field_issues],
+                "sample_decisions": [
+                    decision.model_dump(mode="json") for decision in request.sample_decisions
+                ],
                 "code_revision": request.code_revision,
                 "evidence_refs": request.evidence_refs,
                 "sanitized": True,

@@ -222,6 +222,7 @@ export interface ManualReview {
   sample_count: number;
   issue_summary?: string | null;
   field_issues: ReviewFieldIssue[];
+  sample_decisions: ReviewSampleDecision[];
   evidence_refs: string[];
   created_at: string;
 }
@@ -235,6 +236,13 @@ export interface ReviewFieldIssue {
   actual?: string | null;
   code_fixable?: boolean | null;
   evidence_refs: string[];
+}
+
+export interface ReviewSampleDecision {
+  sample_index: number;
+  status: "PASS" | "ISSUE";
+  issue_refs: number[];
+  note?: string | null;
 }
 
 export interface RepairRun {

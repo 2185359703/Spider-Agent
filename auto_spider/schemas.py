@@ -622,6 +622,13 @@ class ReviewFieldIssue(BaseModel):
     evidence_refs: list[str] = Field(default_factory=list)
 
 
+class ReviewSampleDecision(BaseModel):
+    sample_index: int = Field(ge=1)
+    status: Literal["PASS", "ISSUE"]
+    issue_refs: list[int] = Field(default_factory=list)
+    note: str | None = Field(default=None, max_length=5000)
+
+
 class ManualReviewRequest(BaseModel):
     review_status: ReviewStatus
     manual_run_id: str = Field(min_length=1, max_length=32)
@@ -629,6 +636,7 @@ class ManualReviewRequest(BaseModel):
     sample_count: int = Field(default=0, ge=0)
     issue_summary: str | None = Field(default=None, max_length=10000)
     field_issues: list[ReviewFieldIssue] = Field(default_factory=list, max_length=100)
+    sample_decisions: list[ReviewSampleDecision] = Field(default_factory=list, max_length=5000)
     evidence_refs: list[str] = Field(default_factory=list)
     client_request_id: str = Field(min_length=8, max_length=128)
 

@@ -13,6 +13,7 @@ from auto_spider.schemas import (
     ManualRunRequest,
     ObservationCode,
     ReviewFieldIssue,
+    ReviewSampleDecision,
     ReviewStatus,
 )
 from auto_spider.services.tasks import create_manual_run, create_review
@@ -108,6 +109,9 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
                     code_fixable=True,
                 )
             ],
+            sample_decisions=[
+                ReviewSampleDecision(sample_index=1, status="ISSUE", issue_refs=[0])
+            ],
             client_request_id="review-0001",
         ),
     )
@@ -120,6 +124,10 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
     assert (
         db_session.query(FailureBundle).one().bundle_json["field_issues"][0]["field"]
         == "location"
+    )
+    assert (
+        db_session.query(FailureBundle).one().bundle_json["sample_decisions"][0]["status"]
+        == "ISSUE"
     )
 
 
