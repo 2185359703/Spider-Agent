@@ -73,6 +73,18 @@
 
 空列表、无实习岗位、没有岗位列表和访问受限是不同的报告结论，不能在 Spec 或验证器中混淆。
 
+## 响应解码
+
+当接口返回 JSON 外层但业务数据位于 base64、加密或 opaque 字段时，Endpoint 使用 `decode` 描述解码阶段：
+
+- `mode`：`none`、`json_field`、`base64`、`opaque`、`custom_helper`；
+- `input_selector`：定位待解码字段；
+- `encoding`、`algorithm`、`key_source`：仅记录已验证信息；
+- `helper_required`、`helper_entrypoint`：声明是否需要本地解码 helper；
+- `evidence_refs` 和 `confidence`：关联响应和运行证据。
+
+`helper_required=true` 时必须提供 helper 入口；没有稳定解码证据时允许生成 `NEEDS_REVIEW` Spec，但不能生成通过验证的候选采集器。Moka 类接口的加密 `data` 外层就属于这种情况。
+
 ## 生成边界
 
 `generation.allowed_files` 只允许目标平台采集器、平台 TOML、fixture 和测试。TOML、Python 和测试是 Spec 的派生产物，不能反向覆盖 Spec。
