@@ -31,6 +31,16 @@ npm run dev
 
 当 `VITE_API_BASE_URL` 未设置时，前端使用内置演示数据；设置后会读取任务、报告、PlatformSpec、工作流事件、人工运行、审查、修复和证据索引 API。候选 diff 通过本地 AI 产出仓库只读计算，系统不会把控制面代码推送到远程。
 
+Docker Compose 的 API/worker 默认使用 `python:3.12-slim` 构建。若开发机无法访问 Docker Hub，而本机已有兼容镜像，可以指定本地基底镜像，例如：
+
+```powershell
+$env:AUTO_SPIDER_BASE_IMAGE = "auto_spider-openhands-agent-server:latest"
+docker compose build api worker
+docker compose up -d api worker
+```
+
+启动后可检查 `http://127.0.0.1:18000/healthz` 和 `/api/v1/system/health`。
+
 ## 已确认的边界
 
 - 工作目录：`D:\Project\Auto_spider`。
