@@ -52,7 +52,7 @@ class OpenHandsRepairGateway:
             raise RuntimeError(f"REPAIR_VALIDATION_FAILED: {validation.as_dict()}")
         commit_sha = self._commit(context.path, platform_key, changed_files)
         branch_name = f"ai/repair/{platform_key}/{task_id}"
-        push_status = self._push_candidate(branch_name)
+        push_status = self._push_candidate(branch_name, commit_sha)
         return {
             "changed_files": changed_files,
             "commit_sha": commit_sha,
@@ -142,7 +142,7 @@ class OpenHandsRepairGateway:
         )
         return result.stdout.strip()
 
-    def _push_candidate(self, branch_name: str) -> str:
+    def _push_candidate(self, branch_name: str, commit_sha: str) -> str:
         settings = get_settings()
         if not settings.aicoding_push_enabled:
             return "DISABLED"
@@ -162,7 +162,7 @@ class OpenHandsRepairGateway:
                 str(self.worktrees.repository.path),
                 "push",
                 "origin",
-                f"HEAD:refs/heads/{branch_name}",
+                f"{commit_sha}:refs/heads/{branch_name}",
             ],
             check=True,
             capture_output=True,
