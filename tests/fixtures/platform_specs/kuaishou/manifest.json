@@ -1,0 +1,25 @@
+{
+  "redacted": true,
+  "files": [
+    {
+      "path": "detail-response.json",
+      "sha256": "277f2ae52eb1c0435f2a52ee0d9725c6e6c4c5da1a66c39af994f1f38d232967",
+      "size": 2850
+    },
+    {
+      "path": "list-request.json",
+      "sha256": "469263ab985545259b1ed75b070942da379901d551dbfa9b69cc7fc466523681",
+      "size": 98
+    },
+    {
+      "path": "list-response.json",
+      "sha256": "3f66e17acf44fc87f32c301ee977ebb8911aae8b8e5a5c322fdbe386d066f75d",
+      "size": 6974
+    },
+    {
+      "path": "platform_spec.json",
+      "sha256": "6e125a2c5e36bebc3e6c9b7a809a5c407772923cd046be8357699907e4d13b93",
+      "size": 12688
+    }
+  ]
+}

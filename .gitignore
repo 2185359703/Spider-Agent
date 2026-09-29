@@ -13,6 +13,8 @@ dist/
 build/
 *.egg-info/
 evidence/
+output/
+.playwright-cli/
 worktrees/
 logs/
 *.log

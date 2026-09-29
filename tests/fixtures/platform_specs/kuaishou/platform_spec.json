@@ -1,0 +1,477 @@
+{
+  "schema_name": "platform_spec",
+  "schema_version": "1.0",
+  "spec_id": "spec-fixture-kuaishou",
+  "spec_revision": 1,
+  "spec_hash": "163df411c4e966f111bbc0e76950a4b001fb9df5b0de771ebd297befe6cabe09",
+  "task_id": "fixture-kuaishou",
+  "platform_key": "kuaishou",
+  "source_name": "快手",
+  "crawl_version": "v1.0.0",
+  "status": "VALIDATED",
+  "identity": {
+    "entry_url": "https://campus.kuaishou.cn/#/campus/jobs?recruitSubProjectCodes=20271772783534",
+    "normalized_url": "https://campus.kuaishou.cn/#/campus/jobs?recruitSubProjectCodes=20271772783534",
+    "platform_id": null,
+    "entity_id": null
+  },
+  "adapter": {
+    "family": "custom_http",
+    "runtime_mode": "http",
+    "browser_required_for_discovery": true,
+    "browser_required_for_runtime": false,
+    "collector_template": "kuaishou",
+    "version": "1.0"
+  },
+  "request_profile": {
+    "timeout_seconds": 30,
+    "max_retries": 3,
+    "backoff_seconds": [
+      1.0,
+      2.0,
+      4.0
+    ],
+    "rate_limit_per_second": 1.0,
+    "allowed_headers": [
+      "Accept",
+      "Content-Type",
+      "Origin",
+      "Referer",
+      "User-Agent"
+    ],
+    "credentials_required": false
+  },
+  "endpoints": {
+    "list": {
+      "method": "POST",
+      "url_template": "https://campus.kuaishou.cn/recruit/campus/e/api/v1/open/positions/simple",
+      "query": {},
+      "body": {
+        "recruitSubProjectCodes": [
+          "20271772783534"
+        ],
+        "pageSize": "{{page_size}}",
+        "pageNum": "{{page}}"
+      },
+      "response_format": "json",
+      "items_selector": {
+        "source": "response_body",
+        "kind": "json_path",
+        "expression": "$.result.list",
+        "multiple": true,
+        "fallbacks": [],
+        "transforms": [],
+        "confidence": "high",
+        "inferred": false,
+        "inference_reason": null,
+        "evidence_refs": [
+          "tests/fixtures/platform_specs/kuaishou/list-response.json"
+        ]
+      },
+      "evidence_refs": [
+        "tests/fixtures/platform_specs/kuaishou/list-request.json",
+        "tests/fixtures/platform_specs/kuaishou/list-response.json"
+      ],
+      "confidence": "high",
+      "inferred": false
+    },
+    "detail": {
+      "method": "GET",
+      "url_template": "https://campus.kuaishou.cn/recruit/campus/e/api/v1/open/positions/find?id={{source_id}}",
+      "query": {},
+      "body": {},
+      "response_format": "json",
+      "items_selector": null,
+      "evidence_refs": [
+        "tests/fixtures/platform_specs/kuaishou/detail-response.json"
+      ],
+      "confidence": "high",
+      "inferred": false
+    },
+    "related": []
+  },
+  "pagination": {
+    "mode": "page",
+    "page_param": "pageNum",
+    "size_param": "pageSize",
+    "cursor_param": null,
+    "next_url_selector": null,
+    "page_start": 1,
+    "page_size": 10,
+    "max_pages": 23,
+    "termination": [
+      "empty_page",
+      "total_reached",
+      "repeated_page_fingerprint",
+      "max_pages"
+    ],
+    "total_count_selector": {
+      "source": "response_body",
+      "kind": "json_path",
+      "expression": "$.result.total",
+      "multiple": false,
+      "fallbacks": [],
+      "transforms": [],
+      "confidence": "high",
+      "inferred": false,
+      "inference_reason": null,
+      "evidence_refs": [
+        "tests/fixtures/platform_specs/kuaishou/list-response.json"
+      ]
+    },
+    "evidence_refs": [
+      "tests/fixtures/platform_specs/kuaishou/list-request.json",
+      "tests/fixtures/platform_specs/kuaishou/list-response.json"
+    ],
+    "confidence": "high",
+    "inferred": false
+  },
+  "fields": {
+    "source_id": {
+      "required": true,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.id",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [
+            "to_string",
+            "strip"
+          ],
+          "confidence": "high",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "title": {
+      "required": true,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.name",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [
+            "to_text",
+            "normalize_text"
+          ],
+          "confidence": "high",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "source_url": {
+      "required": true,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "template",
+          "expression": "https://campus.kuaishou.cn/#/campus/job-info/{{source_id}}?recruitSubProjectCodes=20271772783534",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [
+            "resolve_template"
+          ],
+          "confidence": "high",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "location": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.workLocationDicts[*].name",
+          "multiple": true,
+          "fallbacks": [],
+          "transforms": [
+            "to_text",
+            "deduplicate"
+          ],
+          "confidence": "high",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "description": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.description",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [
+            "normalize_text"
+          ],
+          "confidence": "high",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "requirements": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.positionDemand",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [
+            "normalize_text"
+          ],
+          "confidence": "high",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "publish_time": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.releaseTime",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [
+            "parse_publish_time"
+          ],
+          "confidence": "high",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "department": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.departmentName",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [
+            "to_text"
+          ],
+          "confidence": "medium",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "employment_type": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.positionNatureCode",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [
+            "to_text"
+          ],
+          "confidence": "high",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "job_type": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.positionCategoryCode",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [
+            "to_text"
+          ],
+          "confidence": "medium",
+          "inferred": false,
+          "inference_reason": null,
+          "evidence_refs": [
+            "tests/fixtures/platform_specs/kuaishou/list-response.json"
+          ]
+        }
+      ],
+      "transforms": []
+    }
+  },
+  "filters": {
+    "internship": {
+      "match_scope": [
+        "title",
+        "employment_type",
+        "description",
+        "requirements"
+      ],
+      "include_keywords": [
+        "实习",
+        "intern",
+        "internship"
+      ],
+      "exclude_keywords": [
+        "正式",
+        "全职",
+        "校招正式岗"
+      ],
+      "match_mode": "any",
+      "must_match": true,
+      "evidence_refs": [
+        "tests/fixtures/platform_specs/kuaishou/list-request.json",
+        "tests/fixtures/platform_specs/kuaishou/list-response.json"
+      ],
+      "confidence": "high",
+      "inferred": false,
+      "inference_reason": null
+    },
+    "location": {
+      "include": [],
+      "exclude": []
+    }
+  },
+  "normalization": {
+    "text": [
+      "decode_html_entities",
+      "strip_html",
+      "replace_nbsp",
+      "collapse_whitespace",
+      "drop_empty_lines"
+    ],
+    "lists": {
+      "deduplicate": true,
+      "preserve_order": true
+    },
+    "time": {
+      "accepted_formats": [
+        "unix_seconds",
+        "unix_milliseconds",
+        "iso8601",
+        "yyyy-mm-dd"
+      ],
+      "default_timezone": "Asia/Shanghai",
+      "infer_missing_publish_time": false
+    },
+    "url": {
+      "resolve_relative": true,
+      "remove_tracking_params": true
+    }
+  },
+  "validation": {
+    "required_fields": [
+      "source_id",
+      "title",
+      "source_url"
+    ],
+    "body_required_any_of": [
+      "description",
+      "requirements"
+    ],
+    "list_required": true,
+    "detail_required": true,
+    "pagination_required": true,
+    "min_sample_count": 1,
+    "live_sample_count": 3,
+    "expected_http_statuses": [
+      200
+    ],
+    "low_confidence_fields": [
+      "department",
+      "job_type"
+    ],
+    "blocking_errors": [
+      "missing_source_id",
+      "missing_title",
+      "missing_source_url",
+      "unbounded_pagination",
+      "unsanitized_sensitive_data"
+    ]
+  },
+  "evidence": {
+    "required_refs": [
+      "entry_page",
+      "list_request",
+      "detail_request",
+      "pagination_request",
+      "internship_filter"
+    ],
+    "manifest_ref": "tests/fixtures/platform_specs/kuaishou/manifest.json",
+    "redaction_status": "redacted"
+  },
+  "generation": {
+    "target_repository": "collector-catalog",
+    "baseline_ref": "d1f3c72ec5e10041f32914d465464808f5c18d9a",
+    "allowed_files": [
+      "collectors/kuaishou.py",
+      "config/platforms/kuaishou.toml",
+      "tests/test_kuaishou.py",
+      "tests/fixtures/kuaishou/*"
+    ],
+    "test_commands": [
+      "python -m compileall collectors/kuaishou.py",
+      "pytest tests/test_kuaishou.py",
+      "ruff check collectors/kuaishou.py tests/test_kuaishou.py"
+    ],
+    "commit_type": "fix",
+    "simulated": false
+  },
+  "confidence_summary": {
+    "high": 3,
+    "medium": 0,
+    "low": 0
+  }
+}
