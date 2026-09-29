@@ -2,7 +2,7 @@
 
 输入招聘入口 URL，由 AI 分析网站、开发采集器、验证并汇报，自动生成候选提交；人工运行、人工审查后采纳，有问题则进入 AI 纠错。
 
-当前已完成首阶段后端骨架、数据模型、Alembic 迁移、FastAPI API、Celery 任务入口、LangGraph 图定义、fake 分析/修复闭环、受管仓库只读检查和自动化测试。真实 Playwright/spider-king 取证、真实 Codex 代码修改、React 管理后台和 Docker 运行尚待后续阶段。
+当前已完成首阶段后端骨架、数据模型、Alembic 迁移、FastAPI API、Celery 任务入口、LangGraph 图定义、fake 分析/修复闭环、受管仓库只读检查和自动化测试。真实 Playwright/spider-king 取证、真实 OpenHands Agent 代码修改、React 管理后台和 Docker 运行尚待后续阶段。
 
 ## 文档入口
 
@@ -11,7 +11,7 @@
 | [完整开发设计](docs/开发设计.md) | 确认业务范围、系统架构、流程、汇报与人工审查 |
 | [PlatformSpec v1](docs/PlatformSpec-v1.md) | 统一中间规范、字段证据、分页、置信度和生成边界 |
 | [数据契约与 API](docs/数据契约与API.md) | 实现字段模型、数据库、接口、事件与版本关联 |
-| [工作流与运行规范](docs/工作流与运行规范.md) | 实现 LangGraph、Codex、Git、隔离运行和恢复 |
+| [工作流与运行规范](docs/工作流与运行规范.md) | 实现 LangGraph、OpenHands Agent、Git、隔离运行和恢复 |
 | [开发计划与验收](docs/开发计划与验收.md) | 开发顺序、工期假设、验收用例与决策清单 |
 
 ## 已确认的边界

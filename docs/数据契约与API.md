@@ -13,7 +13,7 @@
 | `policy_version` | 规则服务 | 汇报规则版本 | 绑定报告，不覆盖历史 |
 | `code_revision` | Git | 采集器代码版本 | commit SHA |
 | `environment_fingerprint` | runner | 镜像、工具和依赖指纹 | 每次运行记录 |
-| `prompt_bundle_hash` | Codex gateway | 提示词和任务模板版本 | 每次 AI 运行记录 |
+| `prompt_bundle_hash` | OpenHands gateway | 提示词和任务模板版本 | 每次 AI 运行记录 |
 
 所有对外 ID 使用 UUIDv7 或 32 字符小写任务号。数据库内部自增主键不暴露给前端。
 

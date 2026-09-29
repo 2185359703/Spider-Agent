@@ -39,6 +39,10 @@ services:
       COLLECTOR_REPO_PATH: /srv/collector-catalog
       EVIDENCE_ROOT: /srv/auto_spider/evidence
       WORKTREE_ROOT: /srv/auto_spider/worktrees
+      OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
+      OPENHANDS_SESSION_API_KEY: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
+      OPENHANDS_LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
+      AGENT_MODE: ${AGENT_MODE:-fake}
     ports:
       - "18000:8000"
     volumes:
@@ -61,10 +65,48 @@ services:
       COLLECTOR_REPO_PATH: /srv/collector-catalog
       EVIDENCE_ROOT: /srv/auto_spider/evidence
       WORKTREE_ROOT: /srv/auto_spider/worktrees
+      OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
+      OPENHANDS_SESSION_API_KEY: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
+      OPENHANDS_LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
+      AGENT_MODE: ${AGENT_MODE:-fake}
     volumes:
       - ./evidence:/srv/auto_spider/evidence
       - ./worktrees:/srv/auto_spider/worktrees
       - ${COLLECTOR_REPO_HOST_PATH:-.}:/srv/collector-catalog:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      openhands-agent-server:
+        condition: service_healthy
+
+  openhands-agent-server:
+    build:
+      context: .
+      dockerfile: docker/openhands-agent-server.Dockerfile
+    command: ["python", "-m", "openhands.agent_server", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      OH_SESSION_API_KEYS_0: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
+      OH_SECRET_KEY: ${OPENHANDS_SECRET_KEY:-local-openhands-secret-key}
+      LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
+      LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-}
+    ports:
+      - "18080:8000"
+    volumes:
+      - ./worktrees:/srv/auto_spider/worktrees
+      - ./evidence:/srv/auto_spider/evidence
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
     depends_on:
       mysql:
         condition: service_healthy

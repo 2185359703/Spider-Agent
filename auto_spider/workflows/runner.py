@@ -26,8 +26,8 @@ from auto_spider.services.spec_builder import build_fake_platform_spec
 
 from .browser_analyzer import BrowserAnalyzer
 from .checkpoints import CheckpointStore
-from .codex_coder import CodexCodingGateway
 from .fakes import FakeAnalyzer, FakeCodingGateway, FakeRepairGateway
+from .openhands_coder import OpenHandsCodingGateway
 
 
 def _now() -> datetime:
@@ -55,8 +55,8 @@ class WorkflowRunner:
             self.coder = coder
         else:
             self.coder = (
-                CodexCodingGateway()
-                if get_settings().coding_mode == "codex"
+                OpenHandsCodingGateway()
+                if get_settings().agent_mode == "openhands"
                 else FakeCodingGateway()
             )
         self.repairer = repairer or FakeRepairGateway()

@@ -4,22 +4,22 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from auto_spider.ai.gateway import CodexGateway
+from auto_spider.ai.openhands_gateway import OpenHandsGateway
 from auto_spider.git.policy import validate_changed_files
 from auto_spider.git.worktree import WorktreeManager
 
 
-class CodexCodingGateway:
+class OpenHandsCodingGateway:
     """Generate and commit a candidate inside a baseline worktree."""
 
     def __init__(
         self,
         *,
         worktrees: WorktreeManager | None = None,
-        gateway: CodexGateway | None = None,
+        gateway: OpenHandsGateway | None = None,
     ) -> None:
         self.worktrees = worktrees or WorktreeManager()
-        self.gateway = gateway or CodexGateway()
+        self.gateway = gateway or OpenHandsGateway()
 
     def generate(
         self,
@@ -38,7 +38,7 @@ class CodexCodingGateway:
         if invalid:
             raise RuntimeError(f"CODE_SCOPE_VIOLATION: {invalid}")
         if not changed_files:
-            raise RuntimeError("CODE_GENERATION_EMPTY: Codex 未产生文件修改")
+            raise RuntimeError("CODE_GENERATION_EMPTY: OpenHands Agent 未产生文件修改")
         commit_sha = self._commit(context.path, platform_key, changed_files)
         return {
             "changed_files": changed_files,

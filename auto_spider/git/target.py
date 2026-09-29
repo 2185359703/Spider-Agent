@@ -20,7 +20,7 @@ class RepositoryInspection:
 class CollectorRepository:
     """Read-only inspection of the existing collector repository.
 
-    Candidate worktrees are intentionally disabled until a real Codex gateway
+    Candidate worktrees are intentionally disabled until a real OpenHands gateway
     supplies a change set and an explicit worker policy enables mutation.
     """
 
