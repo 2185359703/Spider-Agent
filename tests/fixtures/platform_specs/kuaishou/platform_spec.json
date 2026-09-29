@@ -3,7 +3,7 @@
   "schema_version": "1.0",
   "spec_id": "spec-fixture-kuaishou",
   "spec_revision": 1,
-  "spec_hash": "6a49219b1ddc861385f42a41d33518085339745761ce11a1e6cc4cb480f4d7d6",
+  "spec_hash": "d7d1dff817e6fc8ad898f7ba9c79ac23ea5fb433707a6713ac858c98a4c98c8f",
   "task_id": "fixture-kuaishou",
   "platform_key": "kuaishou",
   "source_name": "快手",
@@ -455,7 +455,7 @@
     "redaction_status": "redacted"
   },
   "generation": {
-    "target_repository": "collector-catalog",
+    "target_repository": "aicoding-auto_spider",
     "baseline_ref": "d1f3c72ec5e10041f32914d465464808f5c18d9a",
     "allowed_files": [
       "collectors/kuaishou.py",

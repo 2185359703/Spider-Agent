@@ -359,7 +359,7 @@ class EvidenceSpec(PlatformSpecModel):
 
 
 class GenerationSpec(PlatformSpecModel):
-    target_repository: str = "collector-catalog"
+    target_repository: str = "aicoding-auto_spider"
     baseline_ref: str
     allowed_files: list[str] = Field(default_factory=list)
     test_commands: list[str] = Field(default_factory=list)
@@ -515,7 +515,7 @@ class IntakeItem(BaseModel):
     entry_url: AnyHttpUrl
     platform_name: str | None = Field(default=None, max_length=255)
     platform_key: str | None = Field(default=None, max_length=128)
-    repository_key: str = Field(default="collector-catalog", max_length=128)
+    repository_key: str = Field(default="aicoding-auto_spider", max_length=128)
     policy_version: str = Field(default="report-v1", max_length=64)
 
     @field_validator("platform_key")
