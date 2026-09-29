@@ -8,7 +8,13 @@ from auto_spider.db.models import (
     OnboardingTask,
     WorkflowCheckpoint,
 )
-from auto_spider.schemas import ManualReviewRequest, ManualRunRequest, ObservationCode, ReviewStatus
+from auto_spider.schemas import (
+    ManualReviewRequest,
+    ManualRunRequest,
+    ObservationCode,
+    ReviewFieldIssue,
+    ReviewStatus,
+)
 from auto_spider.services.tasks import create_manual_run, create_review
 from auto_spider.workflows.graph import build_graph
 from auto_spider.workflows.runner import WorkflowRunner
@@ -93,6 +99,15 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
             manual_run_id=manual.manual_run_id,
             code_revision="simulated",
             issue_summary="地点字段为空",
+            field_issues=[
+                ReviewFieldIssue(
+                    field="location",
+                    issue_type="missing",
+                    description="样本缺少工作地点",
+                    sample_indices=[1],
+                    code_fixable=True,
+                )
+            ],
             client_request_id="review-0001",
         ),
     )
@@ -102,6 +117,10 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
     refreshed = db_session.get(OnboardingTask, task.id)
     assert refreshed.status == "WAITING_MANUAL_RUN"
     assert db_session.query(FailureBundle).one().status == "REPAIRED"
+    assert (
+        db_session.query(FailureBundle).one().bundle_json["field_issues"][0]["field"]
+        == "location"
+    )
 
 
 def test_langgraph_definition_compiles() -> None:

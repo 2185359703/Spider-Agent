@@ -599,12 +599,36 @@ class ManualRunRequest(BaseModel):
         return value
 
 
+class ReviewFieldIssue(BaseModel):
+    field: Literal[
+        "source_id",
+        "title",
+        "source_url",
+        "location",
+        "description",
+        "requirements",
+        "publish_time",
+        "employment_type",
+        "internship_filter",
+        "pagination",
+        "other",
+    ]
+    issue_type: Literal["missing", "incorrect", "filter", "pagination", "other"] = "other"
+    description: str = Field(min_length=1, max_length=5000)
+    sample_indices: list[int] = Field(default_factory=list, min_length=0)
+    expected: str | None = Field(default=None, max_length=5000)
+    actual: str | None = Field(default=None, max_length=5000)
+    code_fixable: bool | None = None
+    evidence_refs: list[str] = Field(default_factory=list)
+
+
 class ManualReviewRequest(BaseModel):
     review_status: ReviewStatus
     manual_run_id: str = Field(min_length=1, max_length=32)
     code_revision: str = Field(min_length=1, max_length=80)
     sample_count: int = Field(default=0, ge=0)
     issue_summary: str | None = Field(default=None, max_length=10000)
+    field_issues: list[ReviewFieldIssue] = Field(default_factory=list, max_length=100)
     evidence_refs: list[str] = Field(default_factory=list)
     client_request_id: str = Field(min_length=8, max_length=128)
 

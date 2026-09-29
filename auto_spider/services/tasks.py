@@ -162,6 +162,7 @@ def create_review(
         reviewer_id=task.created_by,
         sample_count=request.sample_count,
         issue_summary=request.issue_summary,
+        issue_details=[issue.model_dump(mode="json") for issue in request.field_issues],
         evidence_refs=request.evidence_refs,
     )
     session.add(review)
@@ -171,16 +172,29 @@ def create_review(
         task.status = "ADOPTED"
         task.next_action = "CLOSE_WITH_REPORT"
     elif request.review_status == "CODE_FIX_REQUIRED":
+        issue_details = [issue.model_dump(mode="json") for issue in request.field_issues]
+        known_fixability = [
+            issue["code_fixable"]
+            for issue in issue_details
+            if issue.get("code_fixable") is not None
+        ]
+        code_fixable = True if known_fixability and all(known_fixability) else None
+        issue_types = {issue.get("issue_type") for issue in issue_details}
         bundle = FailureBundle(
             bundle_id=new_id(),
             task_id=task.task_id,
             run_id=task.current_run_id or "",
             review_id=review.review_id,
-            failure_type="MANUAL_RESULT_MISMATCH",
-            code_fixable=None,
+            failure_type=(
+                "PAGINATION_ERROR"
+                if "pagination" in issue_types
+                else "MANUAL_RESULT_MISMATCH"
+            ),
+            code_fixable=code_fixable,
             status="CREATED",
             bundle_json={
                 "issue_summary": request.issue_summary,
+                "field_issues": [issue.model_dump(mode="json") for issue in request.field_issues],
                 "code_revision": request.code_revision,
                 "evidence_refs": request.evidence_refs,
                 "sanitized": True,

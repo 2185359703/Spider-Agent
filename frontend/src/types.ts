@@ -221,8 +221,20 @@ export interface ManualReview {
   reviewer_id: string;
   sample_count: number;
   issue_summary?: string | null;
+  field_issues: ReviewFieldIssue[];
   evidence_refs: string[];
   created_at: string;
+}
+
+export interface ReviewFieldIssue {
+  field: string;
+  issue_type: string;
+  description: string;
+  sample_indices: number[];
+  expected?: string | null;
+  actual?: string | null;
+  code_fixable?: boolean | null;
+  evidence_refs: string[];
 }
 
 export interface RepairRun {

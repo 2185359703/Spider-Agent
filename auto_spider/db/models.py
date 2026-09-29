@@ -153,6 +153,7 @@ class ManualReview(Base):
     reviewer_id: Mapped[str] = mapped_column(String(128))
     sample_count: Mapped[int] = mapped_column(Integer, default=0)
     issue_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    issue_details: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     evidence_refs: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

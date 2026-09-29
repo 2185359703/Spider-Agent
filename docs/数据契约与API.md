@@ -358,7 +358,7 @@ POST /api/v1/onboarding/batches
 
 人工运行接口登记 `code_revision`、运行参数、环境指纹、manifest、开始/结束时间和计数。服务端先校验 commit 是任务交付版本、manifest 存在且已脱敏，再进入 `WAITING_MANUAL_REVIEW`。
 
-审查提交至少携带 `review_status`、`code_revision`、样本数、问题摘要和证据引用。`PASS` 必须绑定当前 revision；`CODE_FIX_REQUIRED` 必须能生成 failure bundle。
+审查提交至少携带 `review_status`、`code_revision`、样本数、问题摘要和证据引用。发现问题时可附带 `field_issues`，逐项记录字段、问题类型、样本编号、复现说明、代码可修复性和证据引用。`PASS` 必须绑定当前 revision；`CODE_FIX_REQUIRED` 必须能生成包含这些结构化问题的 failure bundle。
 
 ### 4.5 证据下载
 
