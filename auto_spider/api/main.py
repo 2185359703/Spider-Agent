@@ -30,6 +30,7 @@ from auto_spider.schemas import (
     CreateBatchResponse,
     ManualReviewRequest,
     ManualRunRequest,
+    PolicyVersionRequest,
     RepairRequest,
     ReportResponse,
     ResumeRequest,
@@ -298,6 +299,39 @@ def list_policy_versions(
         }
         for row in rows
     ]
+
+
+@app.post("/api/v1/policies", status_code=status.HTTP_201_CREATED)
+def create_policy_version(
+    request: PolicyVersionRequest,
+    session: DbSession,
+    actor: CurrentActor,
+) -> dict:
+    duplicate = session.scalar(
+        select(PolicyVersion).where(
+            PolicyVersion.name == request.name,
+            PolicyVersion.version == request.version,
+        )
+    )
+    if duplicate is not None:
+        raise HTTPException(status_code=409, detail="规则版本已存在")
+    row = PolicyVersion(
+        name=request.name,
+        version=request.version,
+        status=request.status,
+        policy_json=request.policy,
+        created_by=actor.user_id,
+    )
+    session.add(row)
+    session.commit()
+    return {
+        "name": row.name,
+        "version": row.version,
+        "status": row.status,
+        "policy": row.policy_json,
+        "created_by": row.created_by,
+        "created_at": row.created_at,
+    }
 
 
 @app.get("/api/v1/system/repositories")

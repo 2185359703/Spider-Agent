@@ -643,6 +643,13 @@ class RepairRequest(BaseModel):
     client_request_id: str = Field(min_length=8, max_length=128)
 
 
+class PolicyVersionRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    version: str = Field(min_length=1, max_length=40)
+    status: Literal["draft", "published", "retired"] = "draft"
+    policy: dict[str, Any] = Field(default_factory=dict)
+
+
 def platform_key_from_url(url: str) -> str:
     host = urlparse(url).hostname or "unknown"
     value = host.removeprefix("www.").replace(".", "_").replace("-", "_")

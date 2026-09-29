@@ -70,6 +70,13 @@ export async function listPolicies(): Promise<PolicyVersion[]> {
   return request<PolicyVersion[]>("/api/v1/policies");
 }
 
+export async function createPolicy(payload: { name: string; version: string; status: string; policy: Record<string, unknown> }): Promise<PolicyVersion> {
+  if (!API_BASE) {
+    return { ...payload, created_by: "local-user", created_at: new Date().toISOString() };
+  }
+  return request<PolicyVersion>("/api/v1/policies", { method: "POST", body: JSON.stringify(payload) });
+}
+
 export async function getRepositoryStatus(): Promise<RepositoryStatusBundle> {
   if (!API_BASE) {
     return {

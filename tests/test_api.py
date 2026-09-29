@@ -225,6 +225,26 @@ def test_task_history_endpoints_return_manual_review_and_repair_data(db_session)
         ).json()
         assert filtered_submissions[0]["submission_id"] == submission.submission_id
         assert client.get("/api/v1/policies").json()[0]["version"] == "report-v1"
+        created_policy = client.post(
+            "/api/v1/policies",
+            json={
+                "name": "report",
+                "version": "report-v2",
+                "status": "draft",
+                "policy": {"required_fields": ["title"]},
+            },
+        )
+        assert created_policy.status_code == 201
+        duplicate_policy = client.post(
+            "/api/v1/policies",
+            json={
+                "name": "report",
+                "version": "report-v2",
+                "status": "draft",
+                "policy": {},
+            },
+        )
+        assert duplicate_policy.status_code == 409
         assert client.get("/api/v1/system/repositories").status_code == 200
     finally:
         app.dependency_overrides.clear()
