@@ -1,6 +1,6 @@
 """store per-sample manual review decisions
 
-Revision ID: 0004_manual_review_sample_decisions
+Revision ID: 0004_sample_review_decisions
 Revises: 0003_manual_review_issue_details
 Create Date: 2026-09-29
 """
@@ -8,7 +8,7 @@ Create Date: 2026-09-29
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0004_manual_review_sample_decisions"
+revision = "0004_sample_review_decisions"
 down_revision = "0003_manual_review_issue_details"
 branch_labels = None
 depends_on = None
