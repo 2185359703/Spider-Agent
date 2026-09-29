@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     agent_mode: str = "fake"
     analysis_mode: str = "fake"
     auth_mode: str = "dev"
+    frontend_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
     auto_spider_eager_workflow: bool = False
     queue_enabled: bool = False
     max_repair_attempts: int = 3

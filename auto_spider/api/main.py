@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Query, status
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
 
 from auto_spider.api.deps import CurrentActor, DbSession
 from auto_spider.config import get_settings
-from auto_spider.db.models import CodeSubmission, EvidenceFile, PlatformSpec
+from auto_spider.db.models import CodeSubmission, EvidenceFile, OnboardingTask, PlatformSpec
 from auto_spider.schemas import (
     CreateBatchRequest,
     CreateBatchResponse,
@@ -25,6 +27,17 @@ from auto_spider.services.tasks import (
 from auto_spider.workers.tasks import run_onboarding, run_repair
 
 app = FastAPI(title="AI Recruitment Collector Onboarding", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip()
+        for origin in get_settings().frontend_origins.split(",")
+        if origin.strip()
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def enqueue_onboarding(task_id: str) -> None:
@@ -46,6 +59,19 @@ def enqueue_repair(task_id: str, bundle_id: str) -> None:
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok", "service": "auto-spider"}
+
+
+@app.get("/api/v1/onboarding/tasks", response_model=list[TaskResponse])
+def list_onboarding_tasks(
+    session: DbSession,
+    actor: CurrentActor,
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=100, ge=1, le=200),
+) -> list[TaskResponse]:
+    statement = select(OnboardingTask).order_by(OnboardingTask.updated_at.desc()).limit(limit)
+    if status_filter:
+        statement = statement.where(OnboardingTask.status == status_filter)
+    return [TaskResponse.model_validate(row) for row in session.scalars(statement).all()]
 
 
 @app.post(
