@@ -10,8 +10,8 @@ from auto_spider.git.worktree import WorktreeManager
 from auto_spider.validators.candidate import validate_candidate
 
 
-class OpenHandsCodingGateway:
-    """Generate and commit a candidate inside a baseline worktree."""
+class OpenHandsRepairGateway:
+    """Repair a candidate commit in a fresh worktree and create a new candidate."""
 
     def __init__(
         self,
@@ -22,56 +22,58 @@ class OpenHandsCodingGateway:
         self.worktrees = worktrees or WorktreeManager()
         self.gateway = gateway or OpenHandsGateway()
 
-    def generate(
+    def repair(
         self,
         platform_key: str,
         *,
         task_id: str,
         run_id: str,
+        base_ref: str,
         spec: dict[str, Any],
-        evidence_refs: list[str],
+        failure_bundle: dict[str, Any],
     ) -> dict[str, Any]:
-        context = self.worktrees.prepare(task_id, run_id, mutation_enabled=True)
-        prompt = self._prompt(platform_key, spec, evidence_refs)
+        context = self.worktrees.prepare(
+            task_id,
+            run_id,
+            mutation_enabled=True,
+            ref=base_ref,
+        )
+        prompt = self._prompt(platform_key, spec, failure_bundle)
         result = self.gateway.run(prompt, context.path)
-        changed_files = self._changed_files(context.path)
+        changed_files = OpenHandsRepairGateway._changed_files(context.path)
         invalid = validate_changed_files(changed_files, platform_key)
         if invalid:
             raise RuntimeError(f"CODE_SCOPE_VIOLATION: {invalid}")
         if not changed_files:
-            raise RuntimeError("CODE_GENERATION_EMPTY: OpenHands Agent 未产生文件修改")
+            raise RuntimeError("REPAIR_EMPTY: OpenHands Agent 未产生修复文件修改")
         validation = validate_candidate(context.path, platform_key, changed_files)
         if not validation.passed:
-            raise RuntimeError(f"VALIDATION_FAILED: {validation.as_dict()}")
+            raise RuntimeError(f"REPAIR_VALIDATION_FAILED: {validation.as_dict()}")
         commit_sha = self._commit(context.path, platform_key, changed_files)
         return {
             "changed_files": changed_files,
-            "commit_message": f"feat(collectors): 接入 {platform_key} 招聘岗位采集",
-            "simulated": False,
             "commit_sha": commit_sha,
-            "branch_name": f"ai/onboarding/{platform_key}/{task_id}",
-            "baseline_ref": context.baseline_ref,
+            "baseline_ref": base_ref,
+            "branch_name": f"ai/repair/{platform_key}/{task_id}",
             "agent_response": result.final_response,
-            "validation": {
-                "compile_status": validation.compile.status,
-                "pytest_status": validation.pytest.status,
-                "ruff_status": validation.ruff.status,
-                "contract_status": validation.contract_status,
-                "business_status": validation.business_status,
-                "details": validation.as_dict(),
-            },
+            "validation": validation.as_dict(),
+            "simulated": False,
         }
 
     @staticmethod
-    def _prompt(platform_key: str, spec: dict[str, Any], evidence_refs: list[str]) -> str:
+    def _prompt(
+        platform_key: str,
+        spec: dict[str, Any],
+        failure_bundle: dict[str, Any],
+    ) -> str:
         return (
-            "你正在独立 worktree 中生成招聘采集器候选提交。\n"
+            "你正在候选采集器的独立修复 worktree 中工作。\n"
             f"平台键: {platform_key}\n"
             f"PlatformSpec: {spec}\n"
-            f"证据引用: {evidence_refs}\n"
+            f"失败纠错包: {failure_bundle}\n"
             "只允许修改 PlatformSpec generation.allowed_files 中的文件；"
             "不得读取或写入生产凭证、Cookie、数据库或当前工作区；"
-            "必须生成采集器、TOML、fixture 和测试，并报告实际运行的验证命令。"
+            "必须修复失败原因、补充回归测试，并保持统一 RawJobRecord 契约。"
         )
 
     @staticmethod
@@ -120,7 +122,7 @@ class OpenHandsCodingGateway:
                 "user.email=auto-spider@example.invalid",
                 "commit",
                 "-m",
-                f"feat(collectors): 接入 {platform_key} 招聘岗位采集",
+                f"fix(collectors): 修复 {platform_key} 采集器",
             ],
             check=True,
             capture_output=True,

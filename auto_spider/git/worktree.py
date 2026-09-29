@@ -27,17 +27,28 @@ class WorktreeManager:
         run_id: str,
         *,
         mutation_enabled: bool = False,
+        ref: str | None = None,
     ) -> WorktreeContext:
         inspection = self.repository.inspect()
         if not inspection.is_git_repository or not inspection.baseline_available:
             raise RuntimeError("受管采集器仓库或指定基线不可用")
+        baseline_ref = ref or inspection.baseline_ref
+        verified_ref = subprocess.run(
+            ["git", "-C", str(inspection.path), "rev-parse", "--verify", baseline_ref],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if verified_ref.returncode:
+            raise RuntimeError(f"WORKTREE_REF_NOT_FOUND: {baseline_ref}")
         path = (self.root / task_id / run_id).resolve()
         if self.root not in path.parents:
             raise ValueError("worktree 路径越界")
         if not mutation_enabled:
             return WorktreeContext(
                 path=path,
-                baseline_ref=inspection.baseline_ref,
+                baseline_ref=baseline_ref,
                 created=False,
                 mutation_enabled=False,
             )
@@ -51,7 +62,7 @@ class WorktreeManager:
                 "add",
                 "--detach",
                 str(path),
-                inspection.baseline_ref,
+                baseline_ref,
             ],
             check=True,
             capture_output=True,
@@ -60,7 +71,7 @@ class WorktreeManager:
         )
         return WorktreeContext(
             path=path,
-            baseline_ref=inspection.baseline_ref,
+            baseline_ref=baseline_ref,
             created=True,
             mutation_enabled=True,
         )

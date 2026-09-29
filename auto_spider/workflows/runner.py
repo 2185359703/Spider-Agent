@@ -18,6 +18,7 @@ from auto_spider.db.models import (
     WorkflowEvent,
     WorkflowRun,
 )
+from auto_spider.git.policy import validate_changed_files
 from auto_spider.git.target import CollectorRepository
 from auto_spider.schemas import NextAction, ObservationCode, TechnicalStatus
 from auto_spider.services.evidence import EvidenceStore
@@ -28,6 +29,7 @@ from .browser_analyzer import BrowserAnalyzer
 from .checkpoints import CheckpointStore
 from .fakes import FakeAnalyzer, FakeCodingGateway, FakeRepairGateway
 from .openhands_coder import OpenHandsCodingGateway
+from .openhands_repair import OpenHandsRepairGateway
 
 
 def _now() -> datetime:
@@ -59,7 +61,14 @@ class WorkflowRunner:
                 if get_settings().agent_mode == "openhands"
                 else FakeCodingGateway()
             )
-        self.repairer = repairer or FakeRepairGateway()
+        if repairer is not None:
+            self.repairer = repairer
+        else:
+            self.repairer = (
+                OpenHandsRepairGateway()
+                if get_settings().agent_mode == "openhands"
+                else FakeRepairGateway()
+            )
         self.checkpoints = CheckpointStore()
         self.evidence = EvidenceStore()
 
@@ -181,11 +190,23 @@ class WorkflowRunner:
 
         invalid_files = self.repairer.validate(task.platform_key, generated["changed_files"])
         spec_errors = spec_model.candidate_blocking_errors()
+        generated_validation = generated.get("validation", {})
+        validation_checks_passed = all(
+            generated_validation.get(name, "PASS") == "PASS"
+            for name in (
+                "compile_status",
+                "pytest_status",
+                "ruff_status",
+                "contract_status",
+                "business_status",
+            )
+        )
         observation = ObservationCode(analysis.observation["observation_code"])
         validation_passed = (
             not invalid_files
             and not spec_errors
             and observation != ObservationCode.ACCESS_RESTRICTED
+            and validation_checks_passed
         )
         technical = technical_status_for(observation)
         if invalid_files:
@@ -210,6 +231,7 @@ class WorkflowRunner:
             result_json={
                 "invalid_files": invalid_files,
                 "spec_errors": spec_errors,
+                "candidate_validation": generated_validation,
                 "repository": CollectorRepository().candidate_context(),
             },
         )
@@ -250,6 +272,7 @@ class WorkflowRunner:
             "valid_record_count": analysis.observation["valid_record_count"],
             "missing_publish_time_count": 0,
             "validation": {
+                "compile_status": generated_validation.get("compile_status", "NOT_RUN"),
                 "pytest_status": validation.pytest_status,
                 "ruff_status": validation.ruff_status,
                 "contract_status": validation.contract_status,
@@ -335,17 +358,56 @@ class WorkflowRunner:
         )
         session.add(run)
         session.flush()
-        repair = self.repairer.repair(task.platform_key, bundle.bundle_json.get("issue_summary"))
-        invalid_files = self.repairer.validate(task.platform_key, repair["changed_files"])
+        if isinstance(self.repairer, OpenHandsRepairGateway):
+            latest_submission = session.scalar(
+                select(CodeSubmission)
+                .where(
+                    CodeSubmission.task_id == task_id,
+                    CodeSubmission.commit_sha.is_not(None),
+                )
+                .order_by(CodeSubmission.created_at.desc())
+            )
+            latest_spec = session.scalar(
+                select(PlatformSpec)
+                .where(PlatformSpec.task_id == task_id, PlatformSpec.is_current.is_(True))
+                .order_by(PlatformSpec.spec_version.desc())
+            )
+            if latest_submission is None or latest_submission.commit_sha is None:
+                raise RuntimeError("REPAIR_BASE_COMMIT_MISSING")
+            if latest_spec is None:
+                raise RuntimeError("REPAIR_SPEC_MISSING")
+            repair = self.repairer.repair(
+                task.platform_key,
+                task_id=task_id,
+                run_id=run.run_id,
+                base_ref=latest_submission.commit_sha,
+                spec=latest_spec.spec_json,
+                failure_bundle=bundle.bundle_json,
+            )
+        else:
+            repair = self.repairer.repair(
+                task.platform_key,
+                bundle.bundle_json.get("issue_summary"),
+            )
+        invalid_files = validate_changed_files(repair["changed_files"], task.platform_key)
+        diagnosis = repair.get(
+            "diagnosis",
+            {
+                "code_fixable": True,
+                "root_cause": bundle.bundle_json.get("issue_summary"),
+            },
+        )
+        regression = repair.get("regression", repair.get("validation", {}))
         repair_run = RepairRun(
             repair_run_id=_id(),
             task_id=task_id,
             bundle_id=bundle_id,
             attempt=attempt,
             status="COMPLETED" if not invalid_files else "FAILED",
-            diagnosis_json=repair["diagnosis"],
+            diagnosis_json=diagnosis,
             changed_files=repair["changed_files"],
-            regression_json={**repair["regression"], "invalid_files": invalid_files},
+            regression_json={**regression, "invalid_files": invalid_files},
+            commit_sha=repair.get("commit_sha"),
         )
         session.add(repair_run)
         if not invalid_files:
@@ -355,12 +417,12 @@ class WorkflowRunner:
                     task_id=task_id,
                     run_id=run.run_id,
                     branch_name=f"ai/repair/{task.platform_key}/{task_id}-r{attempt}",
-                    commit_sha=None,
-                    baseline_ref=get_settings().collector_baseline_ref,
+                    commit_sha=repair.get("commit_sha"),
+                    baseline_ref=repair.get("baseline_ref", get_settings().collector_baseline_ref),
                     changed_files=repair["changed_files"],
                     submission_type="repair",
                     adoption_status="candidate",
-                    simulated=True,
+                    simulated=repair.get("simulated", True),
                 )
             )
             task.status = "WAITING_MANUAL_RUN"
