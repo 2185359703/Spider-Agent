@@ -89,10 +89,12 @@
 
 `generation.allowed_files` 只允许目标平台采集器、平台 TOML、fixture 和测试。TOML、Python 和测试是 Spec 的派生产物，不能反向覆盖 Spec。
 
-当前目标基线：
+当前源仓库和 AI 产出仓库：
 
 ~~~text
-d1f3c72ec5e10041f32914d465464808f5c18d9a
+源仓库：fun-crawler-v2
+源基线：16cba8439396e371973e4ee0301d3a88f2f32ba5
+AI 产出仓库：aicoding-auto_spider
 ~~~
 
 ## 状态
