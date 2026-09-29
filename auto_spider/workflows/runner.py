@@ -26,6 +26,7 @@ from auto_spider.services.spec_builder import build_fake_platform_spec
 
 from .browser_analyzer import BrowserAnalyzer
 from .checkpoints import CheckpointStore
+from .codex_coder import CodexCodingGateway
 from .fakes import FakeAnalyzer, FakeCodingGateway, FakeRepairGateway
 
 
@@ -50,7 +51,14 @@ class WorkflowRunner:
             self.analyzer = (
                 BrowserAnalyzer() if get_settings().analysis_mode == "browser" else FakeAnalyzer()
             )
-        self.coder = coder or FakeCodingGateway()
+        if coder is not None:
+            self.coder = coder
+        else:
+            self.coder = (
+                CodexCodingGateway()
+                if get_settings().coding_mode == "codex"
+                else FakeCodingGateway()
+            )
         self.repairer = repairer or FakeRepairGateway()
         self.checkpoints = CheckpointStore()
         self.evidence = EvidenceStore()
@@ -156,7 +164,13 @@ class WorkflowRunner:
         session.flush()
         self._checkpoint(session, task, run, "build_spec", {"spec_version": spec_row.spec_version})
 
-        generated = self.coder.generate(task.platform_key)
+        generated = self.coder.generate(
+            task.platform_key,
+            task_id=task.task_id,
+            run_id=run.run_id,
+            spec=spec,
+            evidence_refs=[evidence.evidence_id],
+        )
         self._checkpoint(
             session,
             task,
@@ -266,13 +280,19 @@ class WorkflowRunner:
                 submission_id=_id(),
                 task_id=task.task_id,
                 run_id=run.run_id,
-                branch_name=f"ai/onboarding/{task.platform_key}/{task.task_id}",
-                commit_sha=None,
-                baseline_ref=get_settings().collector_baseline_ref,
+                branch_name=generated.get(
+                    "branch_name",
+                    f"ai/onboarding/{task.platform_key}/{task.task_id}",
+                ),
+                commit_sha=generated.get("commit_sha"),
+                baseline_ref=generated.get(
+                    "baseline_ref",
+                    get_settings().collector_baseline_ref,
+                ),
                 changed_files=generated["changed_files"],
                 submission_type="onboarding",
                 adoption_status="candidate",
-                simulated=True,
+                simulated=generated.get("simulated", True),
             )
             session.add(submission)
             task.status = "WAITING_MANUAL_RUN"

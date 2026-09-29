@@ -39,7 +39,7 @@ class FakeAnalyzer:
 
 
 class FakeCodingGateway:
-    def generate(self, platform_key: str) -> dict[str, Any]:
+    def generate(self, platform_key: str, **_kwargs: Any) -> dict[str, Any]:
         changed_files = [
             f"collectors/{platform_key}.py",
             f"config/platforms/{platform_key}.toml",

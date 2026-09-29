@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     collector_repo_path: Path = Path(r"C:\Users\ASUS\Desktop\jichu-v5-sync")
     collector_baseline_ref: str = "d1f3c72ec5e10041f32914d465464808f5c18d9a"
     codex_model: str = "gpt-6-sol"
+    coding_mode: str = "fake"
     analysis_mode: str = "fake"
     auth_mode: str = "dev"
     auto_spider_eager_workflow: bool = False
