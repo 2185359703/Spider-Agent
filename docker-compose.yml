@@ -42,6 +42,9 @@ services:
       OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
       OPENHANDS_SESSION_API_KEY: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
       OPENHANDS_LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
+      OPENHANDS_LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL:-}
+      OPENHANDS_LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-}
+      OPENHANDS_LLM_API_MODE: ${OPENHANDS_LLM_API_MODE:-auto}
       AGENT_MODE: ${AGENT_MODE:-fake}
     ports:
       - "18000:8000"
@@ -68,6 +71,9 @@ services:
       OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
       OPENHANDS_SESSION_API_KEY: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
       OPENHANDS_LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
+      OPENHANDS_LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL:-}
+      OPENHANDS_LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-}
+      OPENHANDS_LLM_API_MODE: ${OPENHANDS_LLM_API_MODE:-auto}
       AGENT_MODE: ${AGENT_MODE:-fake}
     volumes:
       - ./evidence:/srv/auto_spider/evidence
@@ -85,12 +91,16 @@ services:
     build:
       context: .
       dockerfile: docker/openhands-agent-server.Dockerfile
+      args:
+        BASE_IMAGE: ${OPENHANDS_BASE_IMAGE:-python:3.12-slim}
     command: ["python", "-m", "openhands.agent_server", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       OH_SESSION_API_KEYS_0: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
       OH_SECRET_KEY: ${OPENHANDS_SECRET_KEY:-local-openhands-secret-key}
       LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
       LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-}
+      LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL:-}
+      LLM_API_MODE: ${OPENHANDS_LLM_API_MODE:-}
     ports:
       - "18080:8000"
     volumes:

@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     collector_repo_path: Path = Path(r"C:\Users\ASUS\Desktop\jichu-v5-sync")
     collector_baseline_ref: str = "d1f3c72ec5e10041f32914d465464808f5c18d9a"
     openhands_llm_model: str = "anthropic/claude-sonnet-4-5-20250929"
+    openhands_llm_base_url: str | None = None
+    openhands_llm_api_mode: str = "auto"
     openhands_server_url: str = "http://127.0.0.1:8000"
     openhands_session_api_key: str | None = None
     openhands_llm_api_key: str | None = None

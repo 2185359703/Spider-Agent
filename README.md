@@ -24,3 +24,16 @@
 - 汇报业务规则尚未定稿；文档中的默认阈值和业务处理策略均标为建议。
 
 原有 `思路流程.md` 和 `mermaid-diagram.png` 保留。本文档中出现的模块、接口、目录和命令除明确注明“已核对”外，均是待实现设计。
+
+## 本地 `.env` 配置
+
+先复制 `.env.example` 为 `.env`。使用自定义 OpenAI 兼容接口时，至少填写：
+
+```dotenv
+OPENHANDS_LLM_MODEL=openai/<models 返回的模型名>
+OPENHANDS_LLM_BASE_URL=https://your-endpoint.example/v1
+OPENHANDS_LLM_API_MODE=responses
+OPENHANDS_LLM_API_KEY=只放在本机，不要提交到 Git
+```
+
+`OPENHANDS_SERVER_URL`、`OPENHANDS_SESSION_API_KEY` 和 `OPENHANDS_SECRET_KEY` 必须与 OpenHands Agent Server 一致。首次验证建议保留 `AGENT_MODE=fake`；确认 Agent Server 已启动后，再改为 `AGENT_MODE=openhands`。`.env` 已被 `.gitignore` 忽略，不能把密钥写入 `.env.example`、日志、证据或提交记录。

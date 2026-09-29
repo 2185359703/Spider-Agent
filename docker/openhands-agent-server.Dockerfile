@@ -1,4 +1,5 @@
-FROM python:3.12-slim
+ARG BASE_IMAGE=python:3.12-slim
+FROM ${BASE_IMAGE}
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -6,9 +7,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /srv/auto_spider
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git gcc \
-    && rm -rf /var/lib/apt/lists/*
+RUN if command -v git >/dev/null 2>&1; then \
+        :; \
+    elif command -v apt-get >/dev/null 2>&1; then \
+        apt-get update \
+        && apt-get install -y --no-install-recommends git gcc \
+        && rm -rf /var/lib/apt/lists/*; \
+    else \
+        echo "git is required in the Agent Server image" >&2 \
+        && exit 1; \
+    fi
 
 RUN pip install --upgrade pip \
     && pip install \

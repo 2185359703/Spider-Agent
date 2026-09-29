@@ -23,12 +23,16 @@ class OpenHandsGateway:
         session_api_key: str | None = None,
         llm_model: str | None = None,
         llm_api_key: str | None = None,
+        llm_base_url: str | None = None,
+        llm_api_mode: str | None = None,
     ) -> None:
         settings = get_settings()
         self.server_url = (server_url or settings.openhands_server_url).rstrip("/")
         self.session_api_key = session_api_key or settings.openhands_session_api_key
         self.llm_model = llm_model or settings.openhands_llm_model
         self.llm_api_key = llm_api_key or settings.openhands_llm_api_key
+        self.llm_base_url = llm_base_url or settings.openhands_llm_base_url
+        self.llm_api_mode = llm_api_mode or settings.openhands_llm_api_mode
 
     def run(
         self,
@@ -39,6 +43,7 @@ class OpenHandsGateway:
     ) -> AgentResult:
         try:
             from openhands.sdk import LLM, Conversation, Workspace
+            from openhands.sdk.event import MessageEvent
             from openhands.tools.preset.default import get_default_agent
             from pydantic import SecretStr
         except ImportError as exc:
@@ -47,8 +52,14 @@ class OpenHandsGateway:
             ) from exc
 
         llm_kwargs = {"model": self.llm_model}
+        if self.llm_base_url:
+            llm_kwargs["base_url"] = self.llm_base_url
+        if self.llm_api_mode:
+            llm_kwargs["api_mode"] = self.llm_api_mode
         if self.llm_api_key:
             llm_kwargs["api_key"] = SecretStr(self.llm_api_key)
+        # The configured OpenAI-compatible endpoint requires streaming responses.
+        llm_kwargs["stream"] = True
         llm = LLM(**llm_kwargs)
         agent = get_default_agent(llm=llm, cli_mode=True)
         workspace_config: dict[str, str] = {
@@ -64,7 +75,11 @@ class OpenHandsGateway:
         try:
             conversation.send_message(prompt)
             result = conversation.run()
-            final_response = getattr(result, "final_response", None) or str(result)
+            final_response = getattr(result, "final_response", None) or self._final_response(
+                conversation, MessageEvent
+            )
+            if not final_response and result is not None:
+                final_response = str(result)
         finally:
             conversation.close()
         return AgentResult(
@@ -72,3 +87,18 @@ class OpenHandsGateway:
             changed_files=[],
             simulated=False,
         )
+
+    @staticmethod
+    def _final_response(conversation: object, message_event_type: type) -> str:
+        events = getattr(getattr(conversation, "state", None), "events", ())
+        for event in reversed(list(events)):
+            if not isinstance(event, message_event_type) or getattr(event, "source", None) != (
+                "agent"
+            ):
+                continue
+            content = getattr(getattr(event, "llm_message", None), "content", ())
+            text_parts = [getattr(item, "text", "") for item in content]
+            response = "\n".join(part for part in text_parts if part).strip()
+            if response:
+                return response
+        return ""
