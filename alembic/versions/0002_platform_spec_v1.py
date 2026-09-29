@@ -15,7 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    inspector = sa.inspect(op.get_bind())
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
     existing = {column["name"] for column in inspector.get_columns("platform_specs")}
     if "schema_version" not in existing:
         op.add_column(
@@ -33,7 +34,11 @@ def upgrade() -> None:
             sa.Column("spec_hash", sa.String(length=64), nullable=True),
         )
         op.execute("UPDATE platform_specs SET spec_hash = '' WHERE spec_hash IS NULL")
-        op.alter_column("platform_specs", "spec_hash", nullable=False)
+        # SQLite does not implement ALTER COLUMN. The application always writes
+        # a hash, so keeping the column nullable on SQLite preserves the same
+        # runtime contract while allowing local development migrations to run.
+        if bind.dialect.name != "sqlite":
+            op.alter_column("platform_specs", "spec_hash", nullable=False)
     if "status" not in existing:
         op.add_column(
             "platform_specs",

@@ -1,5 +1,5 @@
 import { mockBundle, mockTasks } from "./mock";
-import type { CreateBatchRequest, Task, TaskBundle } from "./types";
+import type { CreateBatchRequest, SubmissionDiff, Task, TaskBundle } from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
@@ -19,15 +19,38 @@ export async function listTasks(): Promise<Task[]> {
 
 export async function getTaskBundle(taskId: string): Promise<TaskBundle> {
   if (!API_BASE) return { ...mockBundle, task: mockTasks.find((task) => task.task_id === taskId) ?? mockBundle.task };
-  const [task, report, specs, submissions, evidence, validation] = await Promise.all([
+  const [task, report, specs, submissions, evidence, validation, timeline, manualRuns, reviews, repairs, failures] = await Promise.all([
     request<Task>(`/api/v1/onboarding/tasks/${taskId}`),
     request<TaskBundle["report"]>(`/api/v1/onboarding/tasks/${taskId}/reports/latest`).catch(() => null),
     request<TaskBundle["specs"]>(`/api/v1/onboarding/tasks/${taskId}/specs`),
     request<TaskBundle["submissions"]>(`/api/v1/onboarding/tasks/${taskId}/submissions`),
     request<TaskBundle["evidence"]>(`/api/v1/onboarding/tasks/${taskId}/evidence`),
     request<TaskBundle["validation"]>(`/api/v1/onboarding/tasks/${taskId}/validation`).catch(() => null),
+    request<TaskBundle["timeline"]>(`/api/v1/onboarding/tasks/${taskId}/timeline`).catch(() => ({ events: [], runs: [] })),
+    request<TaskBundle["manualRuns"]>(`/api/v1/onboarding/tasks/${taskId}/manual-runs`).catch(() => []),
+    request<TaskBundle["reviews"]>(`/api/v1/onboarding/tasks/${taskId}/reviews`).catch(() => []),
+    request<TaskBundle["repairs"]>(`/api/v1/onboarding/tasks/${taskId}/repairs`).catch(() => []),
+    request<TaskBundle["failures"]>(`/api/v1/onboarding/tasks/${taskId}/failures`).catch(() => []),
   ]);
-  return { task, report, specs, submissions, evidence, validation };
+  return { task, report, specs, submissions, evidence, validation, timeline, manualRuns, reviews, repairs, failures };
+}
+
+export async function getSubmissionDiff(taskId: string, submissionId: string): Promise<SubmissionDiff> {
+  if (!API_BASE) {
+    return {
+      submission_id: submissionId,
+      available: true,
+      baseline_ref: "16cba8439396e371973e4ee0301d3a88f2f32ba5",
+      commit_sha: "e2159d7853542380ae0f80ae1a3220fd6a1bc139",
+      changed_files: ["collectors/kuaishou.py", "config/platforms/kuaishou.toml"],
+      diff: "# Mock diff\n+collector candidate changes are available in the AI output repository.\n",
+    };
+  }
+  return request<SubmissionDiff>(`/api/v1/onboarding/tasks/${taskId}/submissions/${submissionId}/diff`);
+}
+
+export function evidenceDownloadUrl(evidenceId: string): string {
+  return `${API_BASE}/api/v1/onboarding/evidence/${evidenceId}/download`;
 }
 
 export async function createBatch(payload: CreateBatchRequest): Promise<{ batch_id: string; task_ids: string[] }> {

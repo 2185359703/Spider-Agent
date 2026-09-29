@@ -97,6 +97,77 @@ export interface ManualRun {
   result?: Record<string, unknown>;
 }
 
+export interface TimelineEvent {
+  event_id: string;
+  event_type: string;
+  run_id?: string | null;
+  occurred_at: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface WorkflowRunSummary {
+  run_id: string;
+  run_type: string;
+  attempt: number;
+  status: string;
+  started_at: string;
+  finished_at?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+}
+
+export interface TaskTimeline {
+  events: TimelineEvent[];
+  runs: WorkflowRunSummary[];
+}
+
+export interface ManualReview {
+  review_id: string;
+  manual_run_id: string;
+  code_revision: string;
+  review_status: string;
+  reviewer_id: string;
+  sample_count: number;
+  issue_summary?: string | null;
+  evidence_refs: string[];
+  created_at: string;
+}
+
+export interface RepairRun {
+  repair_run_id: string;
+  bundle_id: string;
+  attempt: number;
+  status: string;
+  diagnosis: Record<string, unknown>;
+  changed_files: string[];
+  regression: Record<string, unknown>;
+  commit_sha?: string | null;
+  created_at: string;
+}
+
+export interface FailureBundle {
+  bundle_id: string;
+  run_id: string;
+  review_id?: string | null;
+  failure_type: string;
+  code_fixable?: boolean | null;
+  status: string;
+  bundle: Record<string, unknown>;
+  artifact_manifest_ref?: string | null;
+  created_at: string;
+}
+
+export interface SubmissionDiff {
+  submission_id: string;
+  available: boolean;
+  reason?: string;
+  baseline_ref?: string;
+  commit_sha?: string;
+  changed_files?: string[];
+  truncated?: boolean;
+  diff: string;
+}
+
 export interface TaskBundle {
   task: Task;
   report: Report | null;
@@ -104,6 +175,11 @@ export interface TaskBundle {
   submissions: Submission[];
   evidence: Array<Record<string, unknown>>;
   validation: ValidationSummary | null;
+  timeline: TaskTimeline;
+  manualRuns: ManualRun[];
+  reviews: ManualReview[];
+  repairs: RepairRun[];
+  failures: FailureBundle[];
 }
 
 export interface CreateBatchRequest {

@@ -140,4 +140,17 @@ export const mockBundle: TaskBundle = {
     { evidence_id: "b8a3099c83cfe85e2f9ee8d4dd6a831f", file_type: "repair_validation", size_bytes: 517 },
   ],
   validation,
+  timeline: {
+    events: [
+      { event_id: "event-1", event_type: "TASK_CREATED", occurred_at: "2026-09-29T09:31:03Z", payload: {} },
+      { event_id: "event-2", event_type: "REPORT_CREATED", occurred_at: "2026-09-29T09:35:03Z", payload: { observation_code: "INTERNSHIPS_FOUND" } },
+    ],
+    runs: [
+      { run_id: "run-real-kuaishou-repair", run_type: "onboarding", attempt: 1, status: "COMPLETED", started_at: "2026-09-29T09:31:03Z", finished_at: "2026-09-29T09:35:03Z" },
+    ],
+  },
+  manualRuns: [],
+  reviews: [],
+  repairs: [],
+  failures: [],
 };

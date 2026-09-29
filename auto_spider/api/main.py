@@ -1,12 +1,28 @@
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from auto_spider.api.deps import CurrentActor, DbSession
 from auto_spider.config import get_settings
-from auto_spider.db.models import CodeSubmission, EvidenceFile, OnboardingTask, PlatformSpec
+from auto_spider.db.models import (
+    CodeSubmission,
+    EvidenceFile,
+    FailureBundle,
+    ManualReview,
+    ManualRun,
+    OnboardingBatch,
+    OnboardingTask,
+    PlatformSpec,
+    RepairRun,
+    WorkflowEvent,
+    WorkflowRun,
+)
 from auto_spider.schemas import (
     CreateBatchRequest,
     CreateBatchResponse,
@@ -61,6 +77,78 @@ def healthz() -> dict[str, str]:
     return {"status": "ok", "service": "auto-spider"}
 
 
+def _require_task(session, task_id: str) -> OnboardingTask:
+    task = get_task(session, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    return task
+
+
+def _git_output(repository: Path, *args: str, timeout: int = 20) -> tuple[int, str, str]:
+    """Run a read-only git command for a stored submission reference."""
+    result = subprocess.run(
+        ["git", "-C", str(repository), *args],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+@app.get("/api/v1/onboarding/batches")
+def list_onboarding_batches(
+    session: DbSession,
+    actor: CurrentActor,
+    limit: int = Query(default=100, ge=1, le=200),
+) -> list[dict]:
+    rows = session.scalars(
+        select(OnboardingBatch).order_by(OnboardingBatch.updated_at.desc()).limit(limit)
+    ).all()
+    return [
+        {
+            "batch_id": row.batch_id,
+            "client_request_id": row.client_request_id,
+            "status": row.status,
+            "requested_count": row.requested_count,
+            "accepted_count": row.accepted_count,
+            "rejected_count": row.rejected_count,
+            "created_by": row.created_by,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+        }
+        for row in rows
+    ]
+
+
+@app.get("/api/v1/onboarding/batches/{batch_id}")
+def read_onboarding_batch(batch_id: str, session: DbSession, actor: CurrentActor) -> dict:
+    batch = session.scalar(select(OnboardingBatch).where(OnboardingBatch.batch_id == batch_id))
+    if batch is None:
+        raise HTTPException(status_code=404, detail="批次不存在")
+    tasks = session.scalars(
+        select(OnboardingTask)
+        .where(OnboardingTask.batch_id == batch_id)
+        .order_by(OnboardingTask.created_at.asc())
+    ).all()
+    return {
+        "batch": {
+            "batch_id": batch.batch_id,
+            "client_request_id": batch.client_request_id,
+            "status": batch.status,
+            "requested_count": batch.requested_count,
+            "accepted_count": batch.accepted_count,
+            "rejected_count": batch.rejected_count,
+            "created_by": batch.created_by,
+            "created_at": batch.created_at,
+            "updated_at": batch.updated_at,
+        },
+        "tasks": [TaskResponse.model_validate(task) for task in tasks],
+    }
+
+
 @app.get("/api/v1/onboarding/tasks", response_model=list[TaskResponse])
 def list_onboarding_tasks(
     session: DbSession,
@@ -99,10 +187,47 @@ def create_onboarding_batch(
 
 @app.get("/api/v1/onboarding/tasks/{task_id}", response_model=TaskResponse)
 def read_task(task_id: str, session: DbSession, actor: CurrentActor) -> TaskResponse:
-    task = get_task(session, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    return TaskResponse.model_validate(task)
+    return TaskResponse.model_validate(_require_task(session, task_id))
+
+
+@app.get("/api/v1/onboarding/tasks/{task_id}/timeline")
+def task_timeline(task_id: str, session: DbSession, actor: CurrentActor) -> dict:
+    _require_task(session, task_id)
+    events = session.scalars(
+        select(WorkflowEvent)
+        .where(WorkflowEvent.task_id == task_id)
+        .order_by(WorkflowEvent.occurred_at.asc())
+    ).all()
+    runs = session.scalars(
+        select(WorkflowRun)
+        .where(WorkflowRun.task_id == task_id)
+        .order_by(WorkflowRun.started_at.asc())
+    ).all()
+    return {
+        "events": [
+            {
+                "event_id": row.event_id,
+                "event_type": row.event_type,
+                "run_id": row.run_id,
+                "occurred_at": row.occurred_at,
+                "payload": row.payload_json,
+            }
+            for row in events
+        ],
+        "runs": [
+            {
+                "run_id": row.run_id,
+                "run_type": row.run_type,
+                "attempt": row.attempt,
+                "status": row.status,
+                "started_at": row.started_at,
+                "finished_at": row.finished_at,
+                "error_code": row.error_code,
+                "error_message": row.error_message,
+            }
+            for row in runs
+        ],
+    }
 
 
 @app.get("/api/v1/onboarding/tasks/{task_id}/reports/latest", response_model=ReportResponse)
@@ -117,8 +242,7 @@ def read_latest_report(task_id: str, session: DbSession, actor: CurrentActor) ->
 
 @app.get("/api/v1/onboarding/tasks/{task_id}/specs")
 def list_specs(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
-    if get_task(session, task_id) is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
+    _require_task(session, task_id)
     rows = (
         session.query(PlatformSpec)
         .filter(PlatformSpec.task_id == task_id)
@@ -148,11 +272,34 @@ def register_manual_run(
     session: DbSession,
     actor: CurrentActor,
 ) -> dict:
-    task = get_task(session, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
+    task = _require_task(session, task_id)
     manual = create_manual_run(session, task, request)
     return {"manual_run_id": manual.manual_run_id, "status": manual.status}
+
+
+@app.get("/api/v1/onboarding/tasks/{task_id}/manual-runs")
+def list_manual_runs(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
+    _require_task(session, task_id)
+    rows = session.scalars(
+        select(ManualRun)
+        .where(ManualRun.task_id == task_id)
+        .order_by(ManualRun.created_at.desc())
+    ).all()
+    return [
+        {
+            "manual_run_id": row.manual_run_id,
+            "code_revision": row.code_revision,
+            "command_profile": row.command_profile,
+            "environment_fingerprint": row.environment_fingerprint,
+            "started_at": row.started_at,
+            "finished_at": row.finished_at,
+            "artifact_manifest_ref": row.artifact_manifest_ref,
+            "result": row.result_json,
+            "status": row.status,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
 
 
 @app.post("/api/v1/onboarding/tasks/{task_id}/reviews")
@@ -162,9 +309,7 @@ def submit_review(
     session: DbSession,
     actor: CurrentActor,
 ) -> dict:
-    task = get_task(session, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
+    task = _require_task(session, task_id)
     review, bundle = create_review(session, task, request)
     if bundle is not None:
         enqueue_repair(task_id, bundle.bundle_id)
@@ -175,6 +320,78 @@ def submit_review(
     }
 
 
+@app.get("/api/v1/onboarding/tasks/{task_id}/reviews")
+def list_reviews(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
+    _require_task(session, task_id)
+    rows = session.scalars(
+        select(ManualReview)
+        .where(ManualReview.task_id == task_id)
+        .order_by(ManualReview.created_at.desc())
+    ).all()
+    return [
+        {
+            "review_id": row.review_id,
+            "manual_run_id": row.manual_run_id,
+            "code_revision": row.code_revision,
+            "review_status": row.review_status,
+            "reviewer_id": row.reviewer_id,
+            "sample_count": row.sample_count,
+            "issue_summary": row.issue_summary,
+            "evidence_refs": row.evidence_refs,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
+
+
+@app.get("/api/v1/onboarding/tasks/{task_id}/repairs")
+def list_repairs(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
+    _require_task(session, task_id)
+    rows = session.scalars(
+        select(RepairRun)
+        .where(RepairRun.task_id == task_id)
+        .order_by(RepairRun.created_at.desc())
+    ).all()
+    return [
+        {
+            "repair_run_id": row.repair_run_id,
+            "bundle_id": row.bundle_id,
+            "attempt": row.attempt,
+            "status": row.status,
+            "diagnosis": row.diagnosis_json,
+            "changed_files": row.changed_files,
+            "regression": row.regression_json,
+            "commit_sha": row.commit_sha,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
+
+
+@app.get("/api/v1/onboarding/tasks/{task_id}/failures")
+def list_failure_bundles(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
+    _require_task(session, task_id)
+    rows = session.scalars(
+        select(FailureBundle)
+        .where(FailureBundle.task_id == task_id)
+        .order_by(FailureBundle.created_at.desc())
+    ).all()
+    return [
+        {
+            "bundle_id": row.bundle_id,
+            "run_id": row.run_id,
+            "review_id": row.review_id,
+            "failure_type": row.failure_type,
+            "code_fixable": row.code_fixable,
+            "status": row.status,
+            "bundle": row.bundle_json,
+            "artifact_manifest_ref": row.artifact_manifest_ref,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
+
+
 @app.post("/api/v1/onboarding/tasks/{task_id}/resume")
 def resume_task(
     task_id: str,
@@ -182,9 +399,7 @@ def resume_task(
     session: DbSession,
     actor: CurrentActor,
 ) -> dict:
-    task = get_task(session, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
+    task = _require_task(session, task_id)
     task.status = "SUBMITTED"
     task.next_action = "CREATE_CANDIDATE"
     session.commit()
@@ -199,9 +414,7 @@ def repair_task(
     session: DbSession,
     actor: CurrentActor,
 ) -> dict:
-    task = get_task(session, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
+    _require_task(session, task_id)
     if not request.failure_bundle_id:
         raise HTTPException(status_code=400, detail="failure_bundle_id 必填")
     enqueue_repair(task_id, request.failure_bundle_id)
@@ -210,9 +423,12 @@ def repair_task(
 
 @app.get("/api/v1/onboarding/tasks/{task_id}/submissions")
 def list_submissions(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
-    if get_task(session, task_id) is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    rows = session.query(CodeSubmission).filter(CodeSubmission.task_id == task_id).all()
+    _require_task(session, task_id)
+    rows = session.scalars(
+        select(CodeSubmission)
+        .where(CodeSubmission.task_id == task_id)
+        .order_by(CodeSubmission.created_at.desc())
+    ).all()
     return [
         {
             "submission_id": row.submission_id,
@@ -228,11 +444,73 @@ def list_submissions(task_id: str, session: DbSession, actor: CurrentActor) -> l
     ]
 
 
+@app.get("/api/v1/onboarding/tasks/{task_id}/submissions/{submission_id}/diff")
+def submission_diff(
+    task_id: str,
+    submission_id: str,
+    session: DbSession,
+    actor: CurrentActor,
+) -> dict:
+    _require_task(session, task_id)
+    submission = session.scalar(
+        select(CodeSubmission).where(
+            CodeSubmission.task_id == task_id,
+            CodeSubmission.submission_id == submission_id,
+        )
+    )
+    if submission is None:
+        raise HTTPException(status_code=404, detail="候选提交不存在")
+    if not submission.commit_sha:
+        return {
+            "submission_id": submission_id,
+            "available": False,
+            "reason": "候选提交尚未生成 commit",
+            "diff": "",
+        }
+
+    repository = get_settings().aicoding_repo_path
+    if not (repository / ".git").exists():
+        return {
+            "submission_id": submission_id,
+            "available": False,
+            "reason": "AI 产出仓库不存在",
+            "diff": "",
+        }
+    code, diff, error = _git_output(
+        repository,
+        "diff",
+        "--no-ext-diff",
+        "--unified=3",
+        submission.baseline_ref,
+        submission.commit_sha,
+    )
+    if code != 0:
+        return {
+            "submission_id": submission_id,
+            "available": False,
+            "reason": error.strip() or "无法读取候选 diff",
+            "diff": "",
+        }
+    max_chars = 200_000
+    return {
+        "submission_id": submission_id,
+        "available": True,
+        "baseline_ref": submission.baseline_ref,
+        "commit_sha": submission.commit_sha,
+        "changed_files": submission.changed_files,
+        "truncated": len(diff) > max_chars,
+        "diff": diff[:max_chars],
+    }
+
+
 @app.get("/api/v1/onboarding/tasks/{task_id}/evidence")
 def list_evidence(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
-    if get_task(session, task_id) is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    rows = session.query(EvidenceFile).filter(EvidenceFile.task_id == task_id).all()
+    _require_task(session, task_id)
+    rows = session.scalars(
+        select(EvidenceFile)
+        .where(EvidenceFile.task_id == task_id)
+        .order_by(EvidenceFile.created_at.desc())
+    ).all()
     return [
         {
             "evidence_id": row.evidence_id,
@@ -244,6 +522,22 @@ def list_evidence(task_id: str, session: DbSession, actor: CurrentActor) -> list
         }
         for row in rows
     ]
+
+
+@app.get("/api/v1/onboarding/evidence/{evidence_id}/download")
+def download_evidence(evidence_id: str, session: DbSession, actor: CurrentActor) -> FileResponse:
+    evidence = session.scalar(select(EvidenceFile).where(EvidenceFile.evidence_id == evidence_id))
+    if evidence is None:
+        raise HTTPException(status_code=404, detail="证据文件不存在")
+    root = get_settings().evidence_root.resolve()
+    target = (root / evidence.relative_path).resolve()
+    if root not in target.parents or not target.is_file():
+        raise HTTPException(status_code=404, detail="证据文件不可用")
+    return FileResponse(
+        target,
+        media_type="application/octet-stream",
+        filename=Path(evidence.relative_path).name,
+    )
 
 
 @app.get("/api/v1/onboarding/tasks/{task_id}/validation")
