@@ -308,6 +308,7 @@ erDiagram
 | POST | `/api/v1/onboarding/batches` | 批量创建 URL 任务 |
 | GET | `/api/v1/onboarding/batches` | 查询最近批次 |
 | GET | `/api/v1/me` | 查询当前用户和角色 |
+| GET | `/api/v1/system/health` | 查询数据库、Redis 和 Agent Server 健康状态 |
 | GET | `/api/v1/onboarding/batches/{batch_id}` | 查询批量汇总 |
 | GET | `/api/v1/onboarding/submissions` | 查询全局候选提交 |
 | GET | `/api/v1/onboarding/samples` | 查询全局人工运行样本 |

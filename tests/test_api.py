@@ -269,6 +269,9 @@ def test_role_permissions_protect_mutating_endpoints(db_session, monkeypatch) ->
         operator_headers = {"X-User-Id": "operator-1", "X-User-Role": "operator"}
         admin_headers = {"X-User-Id": "admin-1", "X-User-Role": "admin"}
         assert client.get("/api/v1/me", headers=viewer_headers).json()["role"] == "viewer"
+        health = client.get("/api/v1/system/health", headers=viewer_headers)
+        assert health.status_code == 200
+        assert {"database", "redis", "agent_server"} <= set(health.json()["checks"])
         assert client.post(
             "/api/v1/onboarding/batches", json=payload, headers=viewer_headers
         ).status_code == 403

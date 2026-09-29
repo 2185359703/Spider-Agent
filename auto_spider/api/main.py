@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, status
@@ -84,6 +86,49 @@ def healthz() -> dict[str, str]:
 @app.get("/api/v1/me")
 def current_actor(actor: CurrentActor) -> dict[str, str]:
     return {"user_id": actor.user_id, "role": actor.role}
+
+
+@app.get("/api/v1/system/health")
+def system_health(session: DbSession, actor: CurrentActor) -> dict:
+    settings = get_settings()
+    checks: dict[str, dict[str, object]] = {}
+    try:
+        session.execute(select(1))
+        checks["database"] = {"status": "ready"}
+    except Exception as exc:  # pragma: no cover - driver-specific failures
+        checks["database"] = {"status": "error", "detail": type(exc).__name__}
+
+    try:
+        import redis
+
+        client = redis.Redis.from_url(settings.redis_url, socket_connect_timeout=1)
+        client.ping()
+        checks["redis"] = {"status": "ready"}
+    except Exception as exc:  # pragma: no cover - local service availability
+        checks["redis"] = {"status": "offline", "detail": type(exc).__name__}
+
+    agent_url = settings.openhands_server_url.rstrip("/") + "/health"
+    try:
+        with urllib.request.urlopen(agent_url, timeout=2) as response:
+            checks["agent_server"] = {
+                "status": "ready" if response.status == 200 else "degraded",
+                "url": settings.openhands_server_url,
+            }
+    except (OSError, urllib.error.URLError, TimeoutError) as exc:
+        checks["agent_server"] = {
+            "status": "offline",
+            "url": settings.openhands_server_url,
+            "detail": type(exc).__name__,
+        }
+
+    overall = "ready" if all(item["status"] == "ready" for item in checks.values()) else "degraded"
+    return {
+        "status": overall,
+        "agent_mode": settings.agent_mode,
+        "analysis_mode": settings.analysis_mode,
+        "queue_enabled": settings.queue_enabled,
+        "checks": checks,
+    }
 
 
 def _require_task(session, task_id: str) -> OnboardingTask:

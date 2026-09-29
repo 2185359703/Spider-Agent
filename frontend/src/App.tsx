@@ -22,7 +22,7 @@ import {
   SettingOutlined,
 } from "@ant-design/icons";
 import { App as AntApp, Button, Checkbox, Input, Modal, Select, Tag, Tooltip } from "antd";
-import { configuredRole, createBatch, createPolicy, evidenceDownloadUrl, getBatch, getCurrentActor, getRepositoryStatus, getSubmissionDiff, getTaskBundle, isLiveApi, listAllSamples, listAllSubmissions, listBatches, listPolicies, listTasks, registerManualRun, resumeTask, submitReview, triggerRepair } from "./api";
+import { configuredRole, createBatch, createPolicy, evidenceDownloadUrl, getBatch, getCurrentActor, getRepositoryStatus, getSubmissionDiff, getSystemHealth, getTaskBundle, isLiveApi, listAllSamples, listAllSubmissions, listBatches, listPolicies, listTasks, registerManualRun, resumeTask, submitReview, triggerRepair } from "./api";
 import { mockBundle } from "./mock";
 import type { BatchDetail, BatchSummary, GlobalSample, GlobalSubmission, PolicyVersion, RepositoryStatusBundle, SampleRecord, Submission, SubmissionDiff, Task, TaskBundle, TaskStatus } from "./types";
 
@@ -72,7 +72,8 @@ function RepositoryMark({ compact = false }: { compact?: boolean }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   const [actorRole, setActorRole] = useState(configuredRole());
-  useEffect(() => { getCurrentActor().then((actor) => setActorRole(actor.role)).catch(() => undefined); }, []);
+  const [agentStatus, setAgentStatus] = useState("ready");
+  useEffect(() => { getCurrentActor().then((actor) => setActorRole(actor.role)).catch(() => undefined); getSystemHealth().then((health) => setAgentStatus(health.checks.agent_server?.status ?? health.status)).catch(() => setAgentStatus("offline")); }, []);
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -97,7 +98,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <main className="main-area">
         <header className="topbar">
           <div className="crumb">AI ONBOARDING <span>/</span> OPERATIONS</div>
-          <div className="topbar-actions"><span className="live-dot" /> Agent Server online <span className="topbar-divider" /> <span className="role-chip">{actorRole}</span><span className="topbar-divider" /> <span className="topbar-date">29 SEP 2026</span></div>
+          <div className="topbar-actions"><span className={agentStatus === "ready" ? "live-dot" : "offline-dot"} /> Agent Server {agentStatus === "ready" ? "online" : agentStatus === "offline" ? "offline" : "degraded"} <span className="topbar-divider" /> <span className="role-chip">{actorRole}</span><span className="topbar-divider" /> <span className="topbar-date">29 SEP 2026</span></div>
         </header>
         <div className="page-content">{children}</div>
       </main>

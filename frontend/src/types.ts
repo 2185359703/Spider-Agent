@@ -172,6 +172,14 @@ export interface ActorProfile {
   role: "viewer" | "operator" | "reviewer" | "admin" | string;
 }
 
+export interface SystemHealth {
+  status: "ready" | "degraded" | string;
+  agent_mode: string;
+  analysis_mode: string;
+  queue_enabled: boolean;
+  checks: Record<string, { status: string; url?: string; detail?: string }>;
+}
+
 export interface SpecSnapshot {
   spec_version: number;
   schema_version: string;

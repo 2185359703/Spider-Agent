@@ -1,5 +1,5 @@
 import { mockBundle, mockTasks } from "./mock";
-import type { ActorProfile, BatchDetail, BatchSummary, CreateBatchRequest, GlobalSample, GlobalSubmission, PolicyVersion, RepositoryStatusBundle, SubmissionDiff, Task, TaskBundle } from "./types";
+import type { ActorProfile, BatchDetail, BatchSummary, CreateBatchRequest, GlobalSample, GlobalSubmission, PolicyVersion, RepositoryStatusBundle, SubmissionDiff, SystemHealth, Task, TaskBundle } from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 const API_USER_ID = (import.meta.env.VITE_USER_ID as string | undefined)?.trim();
@@ -20,6 +20,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function getCurrentActor(): Promise<ActorProfile> {
   if (!API_BASE) return { user_id: API_USER_ID ?? "dev-user", role: API_USER_ROLE ?? "admin" };
   return request<ActorProfile>("/api/v1/me");
+}
+
+export async function getSystemHealth(): Promise<SystemHealth> {
+  if (!API_BASE) {
+    return {
+      status: "ready",
+      agent_mode: "fake",
+      analysis_mode: "fake",
+      queue_enabled: false,
+      checks: { agent_server: { status: "ready", url: "local/fake" }, database: { status: "ready" }, redis: { status: "ready" } },
+    };
+  }
+  return request<SystemHealth>("/api/v1/system/health");
 }
 
 export function configuredRole(): string {
