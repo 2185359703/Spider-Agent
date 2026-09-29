@@ -565,6 +565,8 @@ class TaskResponse(BaseModel):
 
 
 class ReportResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     report_id: str
     task_id: str
     run_id: str
