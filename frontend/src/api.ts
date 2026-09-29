@@ -1,5 +1,5 @@
 import { mockBundle, mockTasks } from "./mock";
-import type { CreateBatchRequest, GlobalSample, GlobalSubmission, PolicyVersion, RepositoryStatusBundle, SubmissionDiff, Task, TaskBundle } from "./types";
+import type { BatchDetail, BatchSummary, CreateBatchRequest, GlobalSample, GlobalSubmission, PolicyVersion, RepositoryStatusBundle, SubmissionDiff, Task, TaskBundle } from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
@@ -105,6 +105,44 @@ export async function createBatch(payload: CreateBatchRequest): Promise<{ batch_
     return { batch_id: `batch-${Date.now()}`, task_ids: [taskId] };
   }
   return request("/api/v1/onboarding/batches", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export async function listBatches(): Promise<BatchSummary[]> {
+  if (!API_BASE) {
+    return [{
+      batch_id: mockBundle.task.batch_id,
+      client_request_id: "demo-batch",
+      status: "SUBMITTED",
+      requested_count: 1,
+      accepted_count: 1,
+      rejected_count: 0,
+      created_by: "demo-user",
+      created_at: mockBundle.task.created_at,
+      updated_at: mockBundle.task.updated_at,
+    }];
+  }
+  return request<BatchSummary[]>("/api/v1/onboarding/batches");
+}
+
+export async function getBatch(batchId: string): Promise<BatchDetail> {
+  if (!API_BASE) {
+    const batch = (await listBatches())[0];
+    return {
+      batch: batch!,
+      tasks: mockTasks.filter((task) => task.batch_id === batchId),
+    };
+  }
+  return request<BatchDetail>(`/api/v1/onboarding/batches/${batchId}`);
+}
+
+export async function resumeTask(taskId: string) {
+  if (!API_BASE) return { task_id: taskId, status: "SUBMITTED" };
+  return request(`/api/v1/onboarding/tasks/${taskId}/resume`, { method: "POST", body: JSON.stringify({ client_request_id: `frontend-resume-${Date.now()}` }) });
+}
+
+export async function triggerRepair(taskId: string, failureBundleId: string) {
+  if (!API_BASE) return { task_id: taskId, status: "REPAIRING" };
+  return request(`/api/v1/onboarding/tasks/${taskId}/repair`, { method: "POST", body: JSON.stringify({ failure_bundle_id: failureBundleId, client_request_id: `frontend-repair-${Date.now()}` }) });
 }
 
 export async function registerManualRun(taskId: string, payload: Record<string, unknown>) {

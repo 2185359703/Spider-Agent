@@ -64,6 +64,23 @@ export interface Task {
   updated_at: string;
 }
 
+export interface BatchSummary {
+  batch_id: string;
+  client_request_id: string;
+  status: string;
+  requested_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BatchDetail {
+  batch: BatchSummary;
+  tasks: Task[];
+}
+
 export interface Submission {
   submission_id: string;
   run_id: string;
