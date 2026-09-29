@@ -55,6 +55,8 @@ services:
     volumes:
       - ./evidence:/srv/auto_spider/evidence
       - ./worktrees:/srv/auto_spider/worktrees
+      - ${COLLECTOR_SOURCE_REPO_HOST_PATH:-.}:/srv/collector-source:ro
+      - ${AICODING_REPO_HOST_PATH:-.}:/srv/aicoding-collector
     depends_on:
       mysql:
         condition: service_healthy
