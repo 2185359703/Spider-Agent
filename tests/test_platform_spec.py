@@ -14,11 +14,11 @@ from auto_spider.schemas import (
     SelectorSource,
     SelectorSpec,
 )
-from auto_spider.services.spec_builder import build_fake_platform_spec
+from auto_spider.services.spec_builder import build_platform_spec
 
 
 def test_platform_spec_hash_is_canonical_and_keeps_ids_null() -> None:
-    spec = build_fake_platform_spec(
+    spec = build_platform_spec(
         task_id="task-001",
         platform_key="example_company",
         source_name="Example",
@@ -45,7 +45,7 @@ def test_platform_spec_hash_is_canonical_and_keeps_ids_null() -> None:
 
 
 def test_low_confidence_hard_field_blocks_candidate() -> None:
-    spec = build_fake_platform_spec(
+    spec = build_platform_spec(
         task_id="task-001",
         platform_key="example_company",
         source_name="Example",

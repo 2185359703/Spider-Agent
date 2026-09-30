@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from auto_spider.ai.openhands_gateway import OpenHandsGateway
+from auto_spider.ai.skill_loader import load_trusted_agent_skills
 from auto_spider.config import get_settings
 from auto_spider.git.policy import validate_changed_files
 from auto_spider.git.worktree import WorktreeManager
@@ -32,6 +34,8 @@ class OpenHandsRepairGateway:
         base_ref: str,
         spec: dict[str, Any],
         failure_bundle: dict[str, Any],
+        expected_observation: str | None = None,
+        event_callback: Callable[[object], None] | None = None,
     ) -> dict[str, Any]:
         context = self.worktrees.prepare(
             task_id,
@@ -40,14 +44,20 @@ class OpenHandsRepairGateway:
             ref=base_ref,
         )
         prompt = self._prompt(platform_key, spec, failure_bundle)
-        result = self.gateway.run(prompt, context.path)
+        result = self.gateway.run(prompt, context.path, event_callback=event_callback)
         changed_files = OpenHandsRepairGateway._changed_files(context.path)
         invalid = validate_changed_files(changed_files, platform_key)
         if invalid:
             raise RuntimeError(f"CODE_SCOPE_VIOLATION: {invalid}")
         if not changed_files:
             raise RuntimeError("REPAIR_EMPTY: OpenHands Agent 未产生修复文件修改")
-        validation = validate_candidate(context.path, platform_key, changed_files)
+        validation = validate_candidate(
+            context.path,
+            platform_key,
+            changed_files,
+            live_url=str((spec.get("identity") or {}).get("entry_url") or "") or None,
+            expected_observation=expected_observation,
+        )
         if not validation.passed:
             raise RuntimeError(f"REPAIR_VALIDATION_FAILED: {validation.as_dict()}")
         commit_sha = self._commit(context.path, platform_key, changed_files)
@@ -71,10 +81,15 @@ class OpenHandsRepairGateway:
         failure_bundle: dict[str, Any],
     ) -> str:
         return (
+            "<trusted_agent_skill>\n"
+            f"{load_trusted_agent_skills()}\n"
+            "</trusted_agent_skill>\n"
             "你正在候选采集器的独立修复 worktree 中工作。\n"
             f"平台键: {platform_key}\n"
             f"PlatformSpec: {spec}\n"
             f"失败纠错包: {failure_bundle}\n"
+            "采集阶段 platform_id/entity_id 必须保持 null；TOML 必须省略 platform_id，"
+            "只保留 platform_id_env，禁止生成任何临时编号。\n"
             "只允许修改 PlatformSpec generation.allowed_files 中的文件；"
             "不得读取或写入生产凭证、Cookie、数据库或当前工作区；"
             "必须修复失败原因、补充回归测试，并保持统一 RawJobRecord 契约。"

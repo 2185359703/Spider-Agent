@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,7 +41,10 @@ class OpenHandsGateway:
         workspace: Path,
         *,
         review_only: bool = False,
+        event_callback: Callable[[object], None] | None = None,
+        token_callback: Callable[[object], None] | None = None,
     ) -> AgentResult:
+        self._ensure_stream_encoding()
         try:
             from openhands.sdk import LLM, Conversation, Workspace
             from openhands.sdk.event import MessageEvent
@@ -71,7 +75,14 @@ class OpenHandsGateway:
         remote_workspace = Workspace(**workspace_config)
         if review_only:
             prompt = "只读审查模式：不得修改文件、创建提交或执行破坏性命令。\n" + prompt
-        conversation = Conversation(agent=agent, workspace=remote_workspace)
+        callbacks = [event_callback] if event_callback is not None else None
+        token_callbacks = [token_callback] if token_callback is not None else None
+        conversation = Conversation(
+            agent=agent,
+            workspace=remote_workspace,
+            callbacks=callbacks,
+            token_callbacks=token_callbacks,
+        )
         try:
             conversation.send_message(prompt)
             result = conversation.run()
@@ -87,6 +98,22 @@ class OpenHandsGateway:
             changed_files=[],
             simulated=False,
         )
+
+    @staticmethod
+    def _ensure_stream_encoding() -> None:
+        """Celery's LoggingProxy omits ``encoding``; libtmux reads it on import."""
+        import sys
+
+        for name in ("stdout", "stderr"):
+            stream = getattr(sys, name, None)
+            if stream is None or getattr(stream, "encoding", None):
+                continue
+            try:
+                stream.encoding = "utf-8"
+            except Exception:
+                # The fallback is only for unusual logging proxies. OpenHands
+                # can still use the underlying stream for output.
+                continue
 
     @staticmethod
     def _remote_workspace_path(workspace: Path) -> str:

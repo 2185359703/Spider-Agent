@@ -204,7 +204,7 @@ class CodeSubmission(Base):
     changed_files: Mapped[list[str]] = mapped_column(JSON, default=list)
     submission_type: Mapped[str] = mapped_column(String(30), default="onboarding")
     adoption_status: Mapped[str] = mapped_column(String(30), default="candidate")
-    simulated: Mapped[bool] = mapped_column(Boolean, default=True)
+    simulated: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     adopted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -249,6 +249,22 @@ class WorkflowEvent(Base):
     payload_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     idempotency_key: Mapped[str] = mapped_column(String(255), unique=True)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class WorkflowLog(Base):
+    __tablename__ = "workflow_logs"
+    __table_args__ = (UniqueConstraint("task_id", "sequence", name="uk_task_log_sequence"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    log_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("onboarding_tasks.task_id"), index=True)
+    run_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    stage: Mapped[str] = mapped_column(String(80))
+    level: Mapped[str] = mapped_column(String(20), default="INFO")
+    message: Mapped[str] = mapped_column(Text)
+    detail_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class WorkflowCheckpoint(Base):

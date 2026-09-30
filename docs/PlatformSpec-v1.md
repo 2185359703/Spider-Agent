@@ -95,6 +95,7 @@
 源仓库：fun-crawler-v2
 源基线：16cba8439396e371973e4ee0301d3a88f2f32ba5
 AI 产出仓库：aicoding-auto_spider
+AI 产出基线：c932dbac4bb75df04008c85d3560c1b7a28ec211（支持 platform_id 未映射暂存）
 ~~~
 
 ## 状态

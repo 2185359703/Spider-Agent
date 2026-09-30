@@ -364,7 +364,7 @@ class GenerationSpec(PlatformSpecModel):
     allowed_files: list[str] = Field(default_factory=list)
     test_commands: list[str] = Field(default_factory=list)
     commit_type: Literal["feat", "fix"] = "feat"
-    simulated: bool = True
+    simulated: bool = False
 
     @field_validator("allowed_files")
     @classmethod
@@ -532,7 +532,7 @@ class IntakeItem(BaseModel):
 class CreateBatchRequest(BaseModel):
     items: list[IntakeItem] = Field(min_length=1, max_length=100)
     analysis_profile: str = Field(default="internship-http-v1", max_length=64)
-    dry_run: bool = True
+    dry_run: bool = False
     client_request_id: str = Field(min_length=8, max_length=128)
 
 

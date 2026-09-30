@@ -177,7 +177,7 @@ export interface SystemHealth {
   agent_mode: string;
   analysis_mode: string;
   queue_enabled: boolean;
-  checks: Record<string, { status: string; url?: string; detail?: string }>;
+  checks: Record<string, { status: string; url?: string; detail?: string; name?: string; size_bytes?: number }>;
 }
 
 export interface SpecSnapshot {
@@ -224,6 +224,17 @@ export interface WorkflowRunSummary {
 export interface TaskTimeline {
   events: TimelineEvent[];
   runs: WorkflowRunSummary[];
+}
+
+export interface WorkflowLogRecord {
+  log_id: string;
+  sequence: number;
+  run_id?: string | null;
+  stage: string;
+  level: string;
+  message: string;
+  detail: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface ManualReview {
@@ -306,6 +317,7 @@ export interface TaskBundle {
   repairs: RepairRun[];
   failures: FailureBundle[];
   samples: SampleBundle;
+  logs: WorkflowLogRecord[];
 }
 
 export interface CreateBatchRequest {

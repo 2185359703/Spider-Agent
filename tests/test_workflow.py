@@ -19,6 +19,7 @@ from auto_spider.schemas import (
 from auto_spider.services.tasks import create_manual_run, create_review
 from auto_spider.workflows.graph import build_graph
 from auto_spider.workflows.runner import WorkflowRunner
+from tests.fakes import FakeAnalyzer, FakeCodingGateway, FakeRepairGateway
 
 
 def make_task(session, url: str = "https://example.com/jobs?fixture=jobs") -> OnboardingTask:
@@ -45,9 +46,17 @@ def make_task(session, url: str = "https://example.com/jobs?fixture=jobs") -> On
     return task
 
 
+def fake_runner() -> WorkflowRunner:
+    return WorkflowRunner(
+        analyzer=FakeAnalyzer(),
+        coder=FakeCodingGateway(),
+        repairer=FakeRepairGateway(),
+    )
+
+
 def test_onboarding_creates_report_candidate_and_checkpoints(db_session, tmp_path: Path) -> None:
     task = make_task(db_session)
-    runner = WorkflowRunner()
+    runner = fake_runner()
     runner.evidence.root = tmp_path / "evidence"
     report = runner.run_onboarding(db_session, task.task_id)
 
@@ -63,7 +72,7 @@ def test_onboarding_creates_report_candidate_and_checkpoints(db_session, tmp_pat
 
 def test_onboarding_reports_no_job_list_without_candidate(db_session, tmp_path: Path) -> None:
     task = make_task(db_session, "https://example.com/careers")
-    runner = WorkflowRunner()
+    runner = fake_runner()
     runner.evidence.root = tmp_path / "evidence"
     report = runner.run_onboarding(db_session, task.task_id)
 
@@ -77,7 +86,7 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
     db_session, tmp_path: Path
 ) -> None:
     task = make_task(db_session)
-    runner = WorkflowRunner()
+    runner = fake_runner()
     runner.evidence.root = tmp_path / "evidence"
     runner.run_onboarding(db_session, task.task_id)
     manual = create_manual_run(

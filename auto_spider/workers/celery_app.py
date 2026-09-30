@@ -20,6 +20,9 @@ celery_app = (
 )
 if celery_app:
     celery_app.conf.update(
+        worker_concurrency=settings.worker_concurrency,
+        worker_prefetch_multiplier=1,
+        worker_max_tasks_per_child=5,
         task_default_queue="analysis",
         task_routes={
             "auto_spider.workers.tasks.run_onboarding": {"queue": "analysis"},

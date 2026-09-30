@@ -4,12 +4,17 @@ import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
+from auto_spider.ai.skill_loader import (
+    load_collector_agent_skill,
+    load_spider_king_agent_skill,
+)
 from auto_spider.api.deps import AdminActor, CurrentActor, DbSession, OperatorActor, ReviewerActor
 from auto_spider.config import get_settings
 from auto_spider.db.models import (
@@ -24,6 +29,7 @@ from auto_spider.db.models import (
     PolicyVersion,
     RepairRun,
     WorkflowEvent,
+    WorkflowLog,
     WorkflowRun,
 )
 from auto_spider.git.target import CollectorRepository
@@ -46,6 +52,7 @@ from auto_spider.services.tasks import (
     get_task,
     latest_report,
 )
+from auto_spider.services.workflow_logs import append_durable_log
 from auto_spider.workers.tasks import run_onboarding, run_repair
 
 app = FastAPI(title="AI Recruitment Collector Onboarding", version="0.1.0")
@@ -64,6 +71,16 @@ app.add_middleware(
 
 def enqueue_onboarding(task_id: str) -> None:
     settings = get_settings()
+    append_durable_log(
+        task_id=task_id,
+        run_id=None,
+        stage="queue",
+        message="任务已提交到工作流队列",
+        detail={
+            "eager": settings.auto_spider_eager_workflow,
+            "queue_enabled": settings.queue_enabled,
+        },
+    )
     if settings.auto_spider_eager_workflow:
         run_onboarding(task_id)
     elif settings.queue_enabled and hasattr(run_onboarding, "delay"):
@@ -72,6 +89,13 @@ def enqueue_onboarding(task_id: str) -> None:
 
 def enqueue_repair(task_id: str, bundle_id: str) -> None:
     settings = get_settings()
+    append_durable_log(
+        task_id=task_id,
+        run_id=None,
+        stage="queue",
+        message="修复任务已提交到工作流队列",
+        detail={"bundle_id": bundle_id, "eager": settings.auto_spider_eager_workflow},
+    )
     if settings.auto_spider_eager_workflow:
         run_repair(task_id, bundle_id)
     elif settings.queue_enabled and hasattr(run_repair, "delay"):
@@ -118,6 +142,34 @@ def system_health(session: DbSession, actor: CurrentActor) -> dict:
         checks["agent_server"] = {
             "status": "offline",
             "url": settings.openhands_server_url,
+            "detail": type(exc).__name__,
+        }
+
+    try:
+        skill_text = load_collector_agent_skill()
+        checks["collector_skill"] = {
+            "status": "ready",
+            "name": "collector-onboarding",
+            "size_bytes": len(skill_text.encode("utf-8")),
+        }
+    except (OSError, RuntimeError) as exc:
+        checks["collector_skill"] = {
+            "status": "offline",
+            "name": "collector-onboarding",
+            "detail": type(exc).__name__,
+        }
+
+    try:
+        spider_skill_text = load_spider_king_agent_skill()
+        checks["spider_king_skill"] = {
+            "status": "ready",
+            "name": "spider-king-collector",
+            "size_bytes": len(spider_skill_text.encode("utf-8")),
+        }
+    except (OSError, RuntimeError) as exc:
+        checks["spider_king_skill"] = {
+            "status": "offline",
+            "name": "spider-king-collector",
             "detail": type(exc).__name__,
         }
 
@@ -483,6 +535,39 @@ def task_timeline(task_id: str, session: DbSession, actor: CurrentActor) -> dict
     }
 
 
+@app.get("/api/v1/onboarding/tasks/{task_id}/logs")
+def task_logs(
+    task_id: str,
+    session: DbSession,
+    actor: CurrentActor,
+    after: int = Query(default=0, ge=0),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> dict:
+    _require_task(session, task_id)
+    rows = session.scalars(
+        select(WorkflowLog)
+        .where(WorkflowLog.task_id == task_id, WorkflowLog.sequence > after)
+        .order_by(WorkflowLog.sequence.asc())
+        .limit(limit)
+    ).all()
+    return {
+        "logs": [
+            {
+                "log_id": row.log_id,
+                "sequence": row.sequence,
+                "run_id": row.run_id,
+                "stage": row.stage,
+                "level": row.level,
+                "message": row.message,
+                "detail": row.detail_json,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ],
+        "next_after": rows[-1].sequence if rows else after,
+    }
+
+
 @app.get("/api/v1/onboarding/tasks/{task_id}/reports/latest", response_model=ReportResponse)
 def read_latest_report(task_id: str, session: DbSession, actor: CurrentActor) -> ReportResponse:
     if get_task(session, task_id) is None:
@@ -693,11 +778,48 @@ def resume_task(
     actor: OperatorActor,
 ) -> dict:
     task = _require_task(session, task_id)
+    idempotency_key = f"{task_id}:resume:{request.client_request_id}"
+    previous = session.scalar(
+        select(WorkflowEvent).where(WorkflowEvent.idempotency_key == idempotency_key)
+    )
+    if previous is not None:
+        return {
+            "task_id": task_id,
+            "status": task.status,
+            "run_id": task.current_run_id,
+            "idempotent": True,
+        }
+    active_run = None
+    if task.status in {"SUBMITTED", "ANALYZING", "REPAIRING"} and task.current_run_id:
+        active_run = session.scalar(
+            select(WorkflowRun).where(
+                WorkflowRun.task_id == task_id,
+                WorkflowRun.run_id == task.current_run_id,
+                WorkflowRun.status == "RUNNING",
+            )
+        )
+    if active_run is not None:
+        return {
+            "task_id": task_id,
+            "status": task.status,
+            "run_id": active_run.run_id,
+            "idempotent": True,
+        }
     task.status = "SUBMITTED"
     task.next_action = "CREATE_CANDIDATE"
+    session.add(
+        WorkflowEvent(
+            event_id=uuid4().hex,
+            event_type="RESUME_REQUESTED",
+            task_id=task_id,
+            run_id=task.current_run_id,
+            idempotency_key=idempotency_key,
+            payload_json={"client_request_id": request.client_request_id},
+        )
+    )
     session.commit()
     enqueue_onboarding(task_id)
-    return {"task_id": task_id, "status": task.status}
+    return {"task_id": task_id, "status": task.status, "idempotent": False}
 
 
 @app.post("/api/v1/onboarding/tasks/{task_id}/repair")

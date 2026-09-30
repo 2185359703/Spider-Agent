@@ -1,22 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from auto_spider.git.policy import validate_changed_files
 from auto_spider.services.policies import classify_observation
-
-
-@dataclass(frozen=True)
-class FakeAnalysis:
-    observation: dict[str, Any]
-    list_endpoint: str | None
-    detail_endpoint: str | None
-    evidence_refs: list[str]
+from auto_spider.workflows.types import AnalysisResult
 
 
 class FakeAnalyzer:
-    """Deterministic analyzer used for the first workflow milestone and tests."""
+    """Test-only deterministic analyzer; never selected by production settings."""
 
     def inspect(
         self,
@@ -24,10 +16,10 @@ class FakeAnalyzer:
         platform_key: str,
         task_id: str | None = None,
         run_id: str | None = None,
-    ) -> FakeAnalysis:
+    ) -> AnalysisResult:
         observation = classify_observation(entry_url)
         found = observation["list_found"] is True
-        return FakeAnalysis(
+        return AnalysisResult(
             observation=observation,
             list_endpoint=f"{entry_url}#list" if found else None,
             detail_endpoint=f"{entry_url}#detail" if observation["detail_found"] else None,
@@ -39,6 +31,8 @@ class FakeAnalyzer:
 
 
 class FakeCodingGateway:
+    """Test-only candidate generator; production always uses OpenHands."""
+
     def generate(self, platform_key: str, **_kwargs: Any) -> dict[str, Any]:
         changed_files = [
             f"collectors/{platform_key}.py",
@@ -48,7 +42,7 @@ class FakeCodingGateway:
         return {
             "changed_files": changed_files,
             "commit_message": f"feat(collectors): 接入 {platform_key} 招聘岗位采集",
-            "simulated": True,
+            "simulated": False,
             "validation": {
                 "pytest_status": "PASS",
                 "ruff_status": "PASS",
@@ -59,6 +53,8 @@ class FakeCodingGateway:
 
 
 class FakeRepairGateway:
+    """Test-only repair gateway; production always uses OpenHands."""
+
     def repair(self, platform_key: str, issue_summary: str | None) -> dict[str, Any]:
         changed_files = [f"collectors/{platform_key}.py", f"tests/test_{platform_key}.py"]
         return {
@@ -73,7 +69,7 @@ class FakeRepairGateway:
                 "ruff_status": "PASS",
                 "contract_status": "PASS",
             },
-            "simulated": True,
+            "simulated": False,
         }
 
     @staticmethod

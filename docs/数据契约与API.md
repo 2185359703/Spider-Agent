@@ -314,6 +314,7 @@ erDiagram
 | GET | `/api/v1/onboarding/samples` | 查询全局人工运行样本 |
 | GET | `/api/v1/onboarding/tasks/{task_id}` | 查询任务和下一步 |
 | GET | `/api/v1/onboarding/tasks/{task_id}/timeline` | 查询工作流事件和轮次 |
+| GET | `/api/v1/onboarding/tasks/{task_id}/logs` | 按 sequence 增量读取逐条工作日志 |
 | POST | `/api/v1/onboarding/tasks/{task_id}/resume` | 补充信息并恢复 |
 | POST | `/api/v1/onboarding/tasks/{task_id}/retry` | 重新执行失败轮次 |
 | GET | `/api/v1/onboarding/tasks/{task_id}/specs` | 查询规范版本 |

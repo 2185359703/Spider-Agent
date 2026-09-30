@@ -32,14 +32,14 @@ class CollectorRepository:
             or settings.collector_repo_path
             or settings.collector_source_repo_path
         )
-        self.baseline_ref = baseline_ref or settings.collector_baseline_ref
+        self.baseline_ref = baseline_ref or settings.aicoding_baseline_ref
 
     @classmethod
     def source_repository(cls) -> CollectorRepository:
         settings = get_settings()
         return cls(
             path=settings.collector_source_repo_path,
-            baseline_ref=settings.collector_baseline_ref,
+            baseline_ref=settings.collector_source_baseline_ref,
         )
 
     def _git(self, *args: str) -> str:

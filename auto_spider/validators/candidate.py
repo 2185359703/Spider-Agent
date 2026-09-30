@@ -30,6 +30,7 @@ class CandidateValidation:
     contract_errors: list[str]
     business_status: str
     business_errors: list[str]
+    live: CommandCheck | None = None
 
     @property
     def passed(self) -> bool:
@@ -40,6 +41,7 @@ class CandidateValidation:
                 self.ruff.status == "PASS",
                 self.contract_status == "PASS",
                 self.business_status == "PASS",
+                self.live is None or self.live.status == "PASS",
             )
         )
 
@@ -109,7 +111,9 @@ def _contract_checks(worktree: Path, platform_key: str, changed_files: list[str]
                 for node in ast.walk(tree)
                 if isinstance(node, ast.ClassDef)
                 and any(
-                    isinstance(base, ast.Name) and base.id == "BaseCollector" for base in node.bases
+                    isinstance(base, ast.Name)
+                    and base.id in {"BaseCollector", "MokaPlatformCollector"}
+                    for base in node.bases
                 )
             }
             if not class_names:
@@ -123,6 +127,8 @@ def _contract_checks(worktree: Path, platform_key: str, changed_files: list[str]
             platform = document.get("platform") or {}
             if platform.get("key") != platform_key:
                 errors.append("CONFIG_CONTRACT: platform.key mismatch")
+            if "platform_id" in platform:
+                errors.append("CONFIG_CONTRACT: collection-stage platform_id must be omitted")
             adapter = str(platform.get("adapter") or "")
             if not adapter.startswith(f"collectors.{platform_key}:"):
                 errors.append("CONFIG_CONTRACT: adapter mismatch")
@@ -135,6 +141,9 @@ def validate_candidate(
     worktree: Path,
     platform_key: str,
     changed_files: list[str],
+    *,
+    live_url: str | None = None,
+    expected_observation: str | None = None,
 ) -> CandidateValidation:
     collector_rel = f"collectors/{platform_key}.py"
     test_rel = f"tests/test_{platform_key}.py"
@@ -149,7 +158,22 @@ def validate_candidate(
     )
     ruff_executable = shutil.which("ruff")
     ruff_check = (
-        _run_command([ruff_executable, "check", collector_rel, test_rel], worktree)
+        _run_command(
+            [
+                ruff_executable,
+                "check",
+                "--isolated",
+                "--select",
+                "E,F,I,UP,B",
+                "--target-version",
+                "py312",
+                "--line-length",
+                "100",
+                collector_rel,
+                test_rel,
+            ],
+            worktree,
+        )
         if ruff_executable
         else CommandCheck(
             "NOT_RUN",
@@ -166,6 +190,46 @@ def validate_candidate(
     if not _safe_file(worktree, f"tests/fixtures/{platform_key}").exists():
         business_errors.append("BUSINESS_FIXTURES_MISSING")
     business_status = "PASS" if not business_errors else "FAIL"
+    live_check: CommandCheck | None = None
+    if live_url:
+        live_script = (
+            "import json, sys\n"
+            "from config.platforms import get_platform\n"
+            "from collectors.registry import CollectorRegistry\n"
+            f"platform = get_platform({platform_key!r})\n"
+            "collector = CollectorRegistry.create(\n"
+            "    platform, crawl_task='live-validation', crawl_batch='live-validation',\n"
+            "    crawl_version='v1.0.0', runtime_options={}\n"
+            ")\n"
+            "records = collector.collect()\n"
+            "summary = {'record_count': len(records), 'fields': []}\n"
+            "for record in records[:3]:\n"
+            "    job = record.raw_content.get('job', {})\n"
+            "    source_url = (getattr(record, 'source_url', None) or "
+            "job.get('source_url') or job.get('apply_url'))\n"
+            "    summary['fields'].append({\n"
+            "        'source_id': record.source_id,\n"
+            "        'title': job.get('title'),\n"
+            "        'source_url': source_url,\n"
+            "        'body': bool(job.get('description') or job.get('requirements')),\n"
+            "    })\n"
+            "if any(\n"
+            "    not item['source_id'] or not item['title'] or "
+            "not item['source_url'] or not item['body']\n"
+            "    for item in summary['fields']\n"
+            "): sys.exit(22)\n"
+            "print(json.dumps(summary, ensure_ascii=False))\n"
+            + (
+                "\nif not records: sys.exit(21)\n"
+                if expected_observation == "INTERNSHIPS_FOUND"
+                else ""
+            )
+        )
+        live_check = _run_command(
+            [python_executable, "-c", live_script],
+            worktree,
+            timeout=240,
+        )
     return CandidateValidation(
         compile=compile_check,
         pytest=pytest_check,
@@ -174,4 +238,5 @@ def validate_candidate(
         contract_errors=contract_errors,
         business_status=business_status,
         business_errors=business_errors,
+        live=live_check,
     )

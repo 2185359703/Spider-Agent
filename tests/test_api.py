@@ -292,3 +292,76 @@ def test_role_permissions_protect_mutating_endpoints(db_session, monkeypatch) ->
         ).status_code == 201
     finally:
         app.dependency_overrides.clear()
+
+
+def test_resume_is_idempotent_and_ignores_stale_running_rows(db_session, monkeypatch) -> None:
+    batch = OnboardingBatch(
+        batch_id="batch-resume-0001",
+        client_request_id="resume-batch-0001",
+        requested_count=2,
+        accepted_count=2,
+        created_by="tester",
+    )
+    stale_task = OnboardingTask(
+        task_id="task-resume-stale",
+        batch_id=batch.batch_id,
+        entry_url="https://example.com/stale",
+        normalized_url="https://example.com/stale",
+        platform_key="resume_stale",
+        status="BLOCKED",
+        current_run_id="run-resume-stale",
+        created_by="tester",
+    )
+    active_task = OnboardingTask(
+        task_id="task-resume-active",
+        batch_id=batch.batch_id,
+        entry_url="https://example.com/active",
+        normalized_url="https://example.com/active",
+        platform_key="resume_active",
+        status="ANALYZING",
+        current_run_id="run-resume-active",
+        created_by="tester",
+    )
+    stale_run = WorkflowRun(
+        run_id="run-resume-stale",
+        task_id=stale_task.task_id,
+        run_type="onboarding",
+        status="RUNNING",
+    )
+    active_run = WorkflowRun(
+        run_id="run-resume-active",
+        task_id=active_task.task_id,
+        run_type="onboarding",
+        status="RUNNING",
+    )
+    db_session.add_all([batch, stale_task, active_task, stale_run, active_run])
+    db_session.commit()
+
+    enqueued: list[str] = []
+    monkeypatch.setattr("auto_spider.api.main.enqueue_onboarding", enqueued.append)
+
+    def override_session():
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        body = {"client_request_id": "resume-attempt-0001"}
+        first = client.post(f"/api/v1/onboarding/tasks/{stale_task.task_id}/resume", json=body)
+        second = client.post(f"/api/v1/onboarding/tasks/{stale_task.task_id}/resume", json=body)
+        active = client.post(
+            f"/api/v1/onboarding/tasks/{active_task.task_id}/resume",
+            json={"client_request_id": "resume-attempt-0002"},
+        )
+        assert first.status_code == 200
+        assert first.json()["idempotent"] is False
+        assert second.json()["idempotent"] is True
+        assert active.json() == {
+            "task_id": active_task.task_id,
+            "status": "ANALYZING",
+            "run_id": active_run.run_id,
+            "idempotent": True,
+        }
+        assert enqueued == [stale_task.task_id]
+    finally:
+        app.dependency_overrides.clear()

@@ -1,6 +1,8 @@
 services:
   mysql:
     image: mysql:8.0
+    mem_limit: ${MYSQL_MEMORY_LIMIT:-768m}
+    cpus: ${MYSQL_CPU_LIMIT:-1.0}
     environment:
       MYSQL_DATABASE: auto_spider
       MYSQL_USER: auto_spider
@@ -19,6 +21,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    mem_limit: ${REDIS_MEMORY_LIMIT:-128m}
+    cpus: ${REDIS_CPU_LIMIT:-0.25}
     ports:
       - "16379:6379"
     volumes:
@@ -30,6 +34,8 @@ services:
       retries: 20
 
   api:
+    mem_limit: ${API_MEMORY_LIMIT:-512m}
+    cpus: ${API_CPU_LIMIT:-0.5}
     build:
       context: .
       args:
@@ -49,7 +55,8 @@ services:
       OPENHANDS_LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL:-}
       OPENHANDS_LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-}
       OPENHANDS_LLM_API_MODE: ${OPENHANDS_LLM_API_MODE:-auto}
-      AGENT_MODE: ${AGENT_MODE:-fake}
+      AGENT_MODE: ${AGENT_MODE:-openhands}
+      ANALYSIS_MODE: ${ANALYSIS_MODE:-browser}
     ports:
       - "18000:8000"
     volumes:
@@ -64,11 +71,13 @@ services:
         condition: service_healthy
 
   worker:
+    mem_limit: ${WORKER_MEMORY_LIMIT:-1536m}
+    cpus: ${WORKER_CPU_LIMIT:-1.0}
     build:
       context: .
       args:
         BASE_IMAGE: ${AUTO_SPIDER_BASE_IMAGE:-python:3.12-slim}
-    command: ["celery", "-A", "auto_spider.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "analysis,coding,validation,reporting,maintenance"]
+    command: ["celery", "-A", "auto_spider.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency", "${WORKER_CONCURRENCY:-1}", "--prefetch-multiplier", "1", "--max-tasks-per-child", "5", "-Q", "analysis,coding,validation,reporting,maintenance"]
     env_file:
       - .env
     environment:
@@ -84,7 +93,8 @@ services:
       OPENHANDS_LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL:-}
       OPENHANDS_LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-}
       OPENHANDS_LLM_API_MODE: ${OPENHANDS_LLM_API_MODE:-auto}
-      AGENT_MODE: ${AGENT_MODE:-fake}
+      AGENT_MODE: ${AGENT_MODE:-openhands}
+      ANALYSIS_MODE: ${ANALYSIS_MODE:-browser}
     volumes:
       - ./evidence:/srv/auto_spider/evidence
       - ./worktrees:/srv/auto_spider/worktrees
@@ -99,6 +109,8 @@ services:
         condition: service_healthy
 
   openhands-agent-server:
+    mem_limit: ${AGENT_MEMORY_LIMIT:-2g}
+    cpus: ${AGENT_CPU_LIMIT:-2.0}
     build:
       context: .
       dockerfile: docker/openhands-agent-server.Dockerfile
@@ -117,6 +129,8 @@ services:
     volumes:
       - ./worktrees:/srv/auto_spider/worktrees
       - ./evidence:/srv/auto_spider/evidence
+      # OpenHands must see the parent repository's .git/worktrees metadata.
+      - ${AICODING_REPO_HOST_PATH:-.}:/srv/aicoding-collector
     healthcheck:
       test:
         [

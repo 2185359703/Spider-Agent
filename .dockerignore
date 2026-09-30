@@ -6,3 +6,12 @@ __pycache__
 evidence
 worktrees
 node_modules
+**/node_modules
+.venv
+.idea
+frontend
+output
+logs
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
