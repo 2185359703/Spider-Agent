@@ -25,7 +25,8 @@ class Settings(BaseSettings):
     openhands_llm_api_mode: str = "auto"
     openhands_server_url: str = "http://127.0.0.1:8000"
     ai_gateway_profile: str = "default"
-    opencode_base_url: str = "https://opencode.ai/zen/v1"
+    opencode_base_url: str = "https://opencode.ai/zen/go/v1"
+    # OpenCode Go uses the OpenAI-compatible /zen/go/v1 endpoint.
     opencode_model: str = "deepseek-v4.1-flash"
     opencode_api_mode: str = "chat"
     opencode_api_key: str | None = None
