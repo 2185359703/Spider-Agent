@@ -1,11 +1,11 @@
 from sqlalchemy.orm import sessionmaker
 
+from auto_spider.db.models import AgentExecution, WorkflowRun
 from auto_spider.services.resource_cleanup import (
     batch_reclaimable,
     cleanup_resources,
     clear_checkout_cache,
 )
-from auto_spider.db.models import AgentExecution, WorkflowRun
 from tests.test_workflow import make_task
 
 
