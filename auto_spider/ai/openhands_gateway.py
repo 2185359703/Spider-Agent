@@ -5,7 +5,7 @@ import json
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -39,6 +39,10 @@ class OpenHandsGateway:
         llm_api_mode: str | None = None,
     ) -> None:
         settings = get_settings()
+        self._llm_model_override = llm_model
+        self._llm_api_key_override = llm_api_key
+        self._llm_base_url_override = llm_base_url
+        self._llm_api_mode_override = llm_api_mode
         self.server_url = (server_url or settings.openhands_server_url).rstrip("/")
         self.session_api_key = session_api_key or settings.openhands_session_api_key
         self.llm_model = llm_model or settings.openhands_llm_model
@@ -81,6 +85,18 @@ class OpenHandsGateway:
 
         settings = get_settings()
         gateway = resolve_gateway_config(settings, factory=execution.factory)
+        overrides = {
+            key: value
+            for key, value in {
+                "model": self._llm_model_override,
+                "api_key": self._llm_api_key_override,
+                "base_url": self._llm_base_url_override,
+                "api_mode": self._llm_api_mode_override,
+            }.items()
+            if value is not None
+        }
+        if overrides:
+            gateway = replace(gateway, **overrides)
         digest = hashlib.sha256(prompt.encode()).hexdigest()
         with execution.factory.begin() as session:
             record = session.scalar(
