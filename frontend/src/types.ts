@@ -189,6 +189,23 @@ export interface SystemHealth {
   checks: Record<string, { status: string; url?: string; detail?: string; name?: string; size_bytes?: number }>;
 }
 
+export interface AiGatewayProfile {
+  profile: string;
+  provider: string;
+  model: string;
+  base_url?: string | null;
+  api_mode: string;
+  configured: boolean;
+  credential_source: string;
+}
+
+export interface AiGatewayStatus {
+  active: AiGatewayProfile;
+  profiles: AiGatewayProfile[];
+  requires_restart?: boolean;
+  old_agent_sessions_unchanged?: boolean;
+}
+
 export interface SpecSnapshot {
   spec_version: number;
   schema_version: string;

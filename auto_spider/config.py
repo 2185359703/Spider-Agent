@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     openhands_llm_base_url: str | None = None
     openhands_llm_api_mode: str = "auto"
     openhands_server_url: str = "http://127.0.0.1:8000"
+    ai_gateway_profile: str = "default"
+    opencode_base_url: str = "https://opencode.ai/zen/v1"
+    opencode_model: str = "deepseek-v4.1-flash"
+    opencode_api_mode: str = "chat"
+    opencode_api_key: str | None = None
     openhands_workspace_root: str = "/srv/auto_spider/worktrees"
     openhands_session_api_key: str | None = None
     openhands_llm_api_key: str | None = None

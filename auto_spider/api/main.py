@@ -8,8 +8,10 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from auto_spider.ai.gateway import available_gateways, public_gateway, resolve_gateway_config
 from auto_spider.ai.skill_loader import (
     load_collector_agent_skill,
     load_spider_king_agent_skill,
@@ -29,6 +31,7 @@ from auto_spider.db.models import (
     PlatformSpec,
     PolicyVersion,
     RepairRun,
+    RuntimeSetting,
     WorkflowCheckpoint,
     WorkflowEvent,
     WorkflowLog,
@@ -133,6 +136,12 @@ def current_actor(actor: CurrentActor) -> dict[str, str]:
 def system_health(session: DbSession, actor: CurrentActor) -> dict:
     settings = get_settings()
     checks: dict[str, dict[str, object]] = {}
+    gateway = resolve_gateway_config(settings, session=session)
+    gateway_view = public_gateway(gateway)
+    checks["ai_gateway"] = {
+        "status": "ready" if gateway_view["configured"] else "offline",
+        **gateway_view,
+    }
     try:
         session.execute(select(1))
         checks["database"] = {"status": "ready"}
@@ -197,6 +206,52 @@ def system_health(session: DbSession, actor: CurrentActor) -> dict:
         "analysis_mode": settings.analysis_mode,
         "queue_enabled": settings.queue_enabled,
         "checks": checks,
+    }
+
+
+class AiGatewaySelectRequest(BaseModel):
+    profile: str = Field(min_length=1, max_length=40)
+
+
+@app.get("/api/v1/system/ai-gateway")
+def ai_gateway_status(session: DbSession, actor: CurrentActor) -> dict:
+    active = resolve_gateway_config(get_settings(), session=session)
+    return {"active": public_gateway(active), "profiles": available_gateways(get_settings())}
+
+
+@app.post("/api/v1/system/ai-gateway/select")
+def select_ai_gateway(
+    request: AiGatewaySelectRequest, session: DbSession, actor: AdminActor
+) -> dict:
+    settings = get_settings()
+    if request.profile not in {item["profile"] for item in available_gateways(settings)}:
+        raise HTTPException(422, "未知 AI 网关 profile")
+    active_agent = session.scalar(
+        select(AgentExecution.execution_id).where(
+            AgentExecution.status.in_(["CREATED", "RUNNING", "DISCONNECTED"])
+        )
+    )
+    active_workflow = session.scalar(
+        select(WorkflowRun.run_id).where(WorkflowRun.status.in_(["RUNNING", "QUEUED"]))
+    )
+    if active_agent or active_workflow:
+        raise HTTPException(409, "存在运行中的 Agent 或工作流，请等待结束后切换网关")
+    row = session.get(RuntimeSetting, "ai_gateway_profile")
+    if row is None:
+        row = RuntimeSetting(
+            key="ai_gateway_profile",
+            value_json={"profile": request.profile},
+            updated_by=actor.user_id,
+        )
+        session.add(row)
+    else:
+        row.value_json = {"profile": request.profile}
+        row.updated_by = actor.user_id
+    session.commit()
+    return {
+        "active": public_gateway(resolve_gateway_config(settings, session=session)),
+        "requires_restart": False,
+        "old_agent_sessions_unchanged": True,
     }
 
 

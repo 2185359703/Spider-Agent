@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
+from auto_spider.ai.gateway import resolve_gateway_config
 from auto_spider.config import get_settings
 from auto_spider.db.models import AgentExecution, ExecutionLease, OnboardingTask
 from auto_spider.services.browser_evidence import sanitize_text
@@ -78,17 +79,8 @@ class OpenHandsGateway:
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
         logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
 
-        llm_kwargs = {"model": self.llm_model}
-        if self.llm_base_url:
-            llm_kwargs["base_url"] = self.llm_base_url
-        if self.llm_api_mode:
-            llm_kwargs["api_mode"] = self.llm_api_mode
-        if self.llm_api_key:
-            llm_kwargs["api_key"] = SecretStr(self.llm_api_key)
-        # The configured OpenAI-compatible endpoint requires streaming responses.
-        llm_kwargs["stream"] = True
-        llm = LLM(**llm_kwargs)
         settings = get_settings()
+        gateway = resolve_gateway_config(settings, factory=execution.factory)
         digest = hashlib.sha256(prompt.encode()).hexdigest()
         with execution.factory.begin() as session:
             record = session.scalar(
@@ -107,6 +99,10 @@ class OpenHandsGateway:
                     workspace_path=str(workspace),
                     server_url=self.server_url,
                     mode="read" if review_only else "write",
+                    gateway_profile=gateway.profile,
+                    gateway_model=gateway.model,
+                    gateway_base_url=gateway.base_url,
+                    gateway_api_mode=gateway.api_mode,
                     status="CREATED",
                     result_json={},
                 )
@@ -115,6 +111,21 @@ class OpenHandsGateway:
                 "read" if review_only else "write"
             ):
                 raise RuntimeError("AGENT_EXECUTION_INPUT_CHANGED")
+            elif record.gateway_profile:
+                gateway = resolve_gateway_config(
+                    settings,
+                    snapshot={
+                        "profile": record.gateway_profile,
+                        "model": record.gateway_model,
+                        "base_url": record.gateway_base_url,
+                        "api_mode": record.gateway_api_mode,
+                    },
+                )
+            else:
+                record.gateway_profile = gateway.profile
+                record.gateway_model = gateway.model
+                record.gateway_base_url = gateway.base_url
+                record.gateway_api_mode = gateway.api_mode
             if record.status == "COMPLETED":
                 return AgentResult(record.result_json.get("final_response", ""), [], False)
             execution_id, conversation_id, previous_status = (
@@ -122,6 +133,14 @@ class OpenHandsGateway:
                 record.conversation_id,
                 record.status,
             )
+        llm_kwargs = {"model": gateway.model, "stream": True}
+        if gateway.base_url:
+            llm_kwargs["base_url"] = gateway.base_url
+        if gateway.api_mode:
+            llm_kwargs["api_mode"] = gateway.api_mode
+        if gateway.api_key:
+            llm_kwargs["api_key"] = SecretStr(gateway.api_key)
+        llm = LLM(**llm_kwargs)
         policy_root = settings.agent_policy_root.resolve()
         policy_root.mkdir(parents=True, exist_ok=True)
         manifest = spec.get("evidence", {}).get("manifest_ref") or ""
@@ -244,7 +263,9 @@ class OpenHandsGateway:
                     if status == "finished":
                         break
                     if status in {"error", "stuck", "waiting_for_confirmation"}:
-                        raise RuntimeError(f"AGENT_{status.upper()}: {conversation_id}")
+                        detail = self._remote_error(remote_workspace, conversation_id)
+                        suffix = f": {detail}" if detail else ""
+                        raise RuntimeError(f"AGENT_{status.upper()}: {conversation_id}{suffix}")
                     if status == "paused" and time.monotonic() - run_started >= 15:
                         raise ExecutionStopped("PAUSE")
                     time.sleep(settings.agent_poll_seconds)
@@ -267,9 +288,18 @@ class OpenHandsGateway:
                         execution.retain_lease = True
                         raise RuntimeError("AGENT_STOP_UNCONFIRMED") from exc
                     time.sleep(0.5)
-            except Exception:
+            except Exception as pause_error:
                 execution.retain_lease = True
-                raise
+                try:
+                    self._record_status(
+                        execution,
+                        execution_id,
+                        "DISCONNECTED",
+                        error=f"AGENT_STOP_UNCONFIRMED: {pause_error}",
+                    )
+                except ExecutionStopped:
+                    pass
+                raise RuntimeError("AGENT_STOP_UNCONFIRMED") from pause_error
             self._record_status(
                 execution,
                 execution_id,
@@ -283,8 +313,15 @@ class OpenHandsGateway:
         except Exception as exc:
             self._record_status(execution, execution_id, "DISCONNECTED", error=str(exc))
             # A remote agent can continue after a client disconnect. Preserve
-            # the platform lease until recovery reconnects to this same session.
+            # the platform lease until recovery reconnects to this same session;
+            # terminal remote failures are safe to release immediately.
             execution.retain_lease = True
+            try:
+                execution.retain_lease = not self._terminal_remote_status(
+                    self._remote_status(remote_workspace, conversation_id)
+                )
+            except Exception:
+                pass
             raise
         finally:
             try:
@@ -366,9 +403,27 @@ class OpenHandsGateway:
 
     @staticmethod
     def _remote_status(workspace, conversation_id: str) -> str:
+        return str(
+            OpenHandsGateway._remote_payload(workspace, conversation_id).get(
+                "execution_status", "unknown"
+            )
+        ).lower()
+
+    @staticmethod
+    def _remote_payload(workspace, conversation_id: str) -> dict:
         response = workspace.client.get(f"/api/conversations/{conversation_id}")
         response.raise_for_status()
-        return str(response.json().get("execution_status", "unknown")).lower()
+        payload = response.json()
+        return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _remote_error(workspace, conversation_id: str) -> str:
+        payload = OpenHandsGateway._remote_payload(workspace, conversation_id)
+        for key in ("error", "error_message", "last_error", "message"):
+            value = payload.get(key)
+            if value:
+                return sanitize_text(str(value))[:500]
+        return ""
 
     @staticmethod
     def _record_status(execution, execution_id, status, *, result=None, error=None):

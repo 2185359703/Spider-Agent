@@ -4,6 +4,7 @@ import type {
   GlobalSubmission,
   SystemHealth,
   ActorProfile,
+  AiGatewayStatus,
   RepositoryStatusBundle,
   PolicyVersion,
 } from "../types";
@@ -68,6 +69,10 @@ export const submissionsApi = () =>
   request<GlobalSubmission[]>("/api/v1/onboarding/submissions");
 export const actorApi = () => request<ActorProfile>("/api/v1/me");
 export const healthApi = () => request<SystemHealth>("/api/v1/system/health");
+export const aiGatewayApi = () =>
+  request<AiGatewayStatus>("/api/v1/system/ai-gateway");
+export const selectAiGateway = (profile: string) =>
+  post<AiGatewayStatus>("/api/v1/system/ai-gateway/select", { profile });
 export const repositoriesApi = () =>
   request<RepositoryStatusBundle>("/api/v1/system/repositories");
 export const policiesApi = () => request<PolicyVersion[]>("/api/v1/policies");

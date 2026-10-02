@@ -112,3 +112,22 @@ OPENHANDS_LLM_API_KEY=只放在本机，不要提交到 Git
 ```
 
 `OPENHANDS_SERVER_URL`、`OPENHANDS_SESSION_API_KEY` 和 `OPENHANDS_SECRET_KEY` 必须与 OpenHands Agent Server 一致。生产运行使用 `AGENT_MODE=openhands`、`ANALYSIS_MODE=browser`；测试替身只通过测试代码显式注入，不由运行环境选择。`.env` 已被 `.gitignore` 忽略，不能把密钥写入 `.env.example`、日志、证据或提交记录。
+
+## AI 网关切换
+
+平台支持通过管理后台“系统设置 → AI 网关”切换 profile。切换只影响新建的 Agent 会话，
+已经运行的会话会继续使用创建时保存的网关快照。
+
+OpenCode Zen 配置示例：
+
+```dotenv
+AI_GATEWAY_PROFILE=opencode_zen
+OPENCODE_BASE_URL=https://opencode.ai/zen/v1
+OPENCODE_MODEL=deepseek-v4.1-flash
+OPENCODE_API_MODE=chat
+OPENCODE_API_KEY=只放在本机 .env，不要提交
+```
+
+OpenCode Zen 使用 OpenAI 兼容的 `/v1/chat/completions` 接口。切换前必须在 `.env` 配置凭证，
+然后执行 `docker compose up -d --build api worker scheduler`。系统设置页不会显示 API key；
+数据库只保存当前 profile 名称，AgentExecution 保存模型、地址和 API 模式快照。

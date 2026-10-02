@@ -243,6 +243,17 @@ class PolicyVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class RuntimeSetting(Base):
+    __tablename__ = "runtime_settings"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    updated_by: Mapped[str] = mapped_column(String(128), default="system")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class WorkflowEvent(Base):
     __tablename__ = "workflow_events"
 
@@ -347,6 +358,10 @@ class AgentExecution(Base):
     server_url: Mapped[str] = mapped_column(String(1024))
     prompt_hash: Mapped[str] = mapped_column(String(64))
     mode: Mapped[str] = mapped_column(String(20), default="write")
+    gateway_profile: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    gateway_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    gateway_base_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    gateway_api_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="CREATED")
     result_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

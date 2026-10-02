@@ -21,10 +21,12 @@ import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   healthApi,
+  aiGatewayApi,
   policiesApi,
   post,
   repositoriesApi,
   requestId,
+  selectAiGateway,
 } from "./api";
 import { contextLink, dateText, label, stageLabels } from "./model";
 import { eventLabel, failureLabel, nextAction } from "./labels";
@@ -386,6 +388,10 @@ export function SettingsPage() {
     queryFn: healthApi,
     refetchInterval: 30000,
   });
+  const gateways = useQuery({
+    queryKey: ["ai-gateway"],
+    queryFn: aiGatewayApi,
+  });
   const repos = useQuery({
     queryKey: ["repositories"],
     queryFn: repositoriesApi,
@@ -426,6 +432,7 @@ export function SettingsPage() {
             icon={<ReloadOutlined />}
             onClick={() => {
               health.refetch();
+              gateways.refetch();
               repos.refetch();
               policies.refetch();
             }}
@@ -451,6 +458,7 @@ export function SettingsPage() {
                     redis: "Redis",
                     openhands: "OpenHands Agent Server",
                     agent_server: "OpenHands Agent Server",
+                    ai_gateway: "AI 网关",
                   } as Record<string, string>
                 )[name] || name}
               </b>
@@ -472,6 +480,49 @@ export function SettingsPage() {
             },
           ]}
         />
+      </LoadState>
+      <h2 className="section-heading">AI 网关</h2>
+      <LoadState loading={gateways.isLoading} error={gateways.error}>
+        {gateways.data && (
+          <div className="repo-setting">
+            <div className="section-heading-row">
+              <div>
+                <b>{gateways.data.active.provider}</b>
+                <p className="muted">
+                  {gateways.data.active.model} · {gateways.data.active.api_mode}
+                </p>
+              </div>
+              <Select
+                value={gateways.data.active.profile}
+                disabled={workspace.role !== "admin"}
+                style={{ minWidth: 220 }}
+                options={gateways.data.profiles.map((profile) => ({
+                  value: profile.profile,
+                  label: `${profile.profile} · ${profile.model}`,
+                  disabled: !profile.configured,
+                }))}
+                onChange={async (profile) => {
+                  try {
+                    await selectAiGateway(profile);
+                    await Promise.all([gateways.refetch(), health.refetch()]);
+                    message.success("AI 网关已切换；新任务将使用新网关");
+                  } catch (e) {
+                    message.error((e as Error).message);
+                  }
+                }}
+              />
+            </div>
+            <p className="muted">
+              地址：{gateways.data.active.base_url || "未配置"} · 凭证来源：环境变量
+            </p>
+            {!gateways.data.active.configured && (
+              <Alert type="warning" title="当前网关凭证未配置，无法启动新的 Agent 会话" />
+            )}
+            <p className="muted">
+              已运行的 Agent 会话继续使用创建时的网关；切换仅影响新任务。
+            </p>
+          </div>
+        )}
       </LoadState>
       <h2 className="section-heading">项目与仓库</h2>
       <LoadState loading={repos.isLoading} error={repos.error}>
