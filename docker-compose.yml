@@ -49,6 +49,7 @@ services:
       AICODING_REPO_PATH: /srv/aicoding-collector
       EVIDENCE_ROOT: /srv/auto_spider/evidence
       WORKTREE_ROOT: /srv/auto_spider/worktrees
+      AGENT_POLICY_ROOT: /srv/auto_spider/agent_policies
       OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
       OPENHANDS_SESSION_API_KEY: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
       OPENHANDS_LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
@@ -62,6 +63,7 @@ services:
     volumes:
       - ./evidence:/srv/auto_spider/evidence
       - ./worktrees:/srv/auto_spider/worktrees
+      - ./agent_policies:/srv/auto_spider/agent_policies
       - ${COLLECTOR_SOURCE_REPO_HOST_PATH:-.}:/srv/collector-source:ro
       - ${AICODING_REPO_HOST_PATH:-.}:/srv/aicoding-collector
     depends_on:
@@ -87,6 +89,7 @@ services:
       AICODING_REPO_PATH: /srv/aicoding-collector
       EVIDENCE_ROOT: /srv/auto_spider/evidence
       WORKTREE_ROOT: /srv/auto_spider/worktrees
+      AGENT_POLICY_ROOT: /srv/auto_spider/agent_policies
       OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
       OPENHANDS_SESSION_API_KEY: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
       OPENHANDS_LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
@@ -98,6 +101,7 @@ services:
     volumes:
       - ./evidence:/srv/auto_spider/evidence
       - ./worktrees:/srv/auto_spider/worktrees
+      - ./agent_policies:/srv/auto_spider/agent_policies
       - ${COLLECTOR_SOURCE_REPO_HOST_PATH:-.}:/srv/collector-source:ro
       - ${AICODING_REPO_HOST_PATH:-.}:/srv/aicoding-collector
     depends_on:
@@ -108,6 +112,14 @@ services:
       openhands-agent-server:
         condition: service_healthy
 
+  scheduler:
+    image: ${COMPOSE_PROJECT_NAME:-auto_spider}-worker
+    extends:
+      service: worker
+    mem_limit: 256m
+    cpus: 0.25
+    command: ["celery", "-A", "auto_spider.workers.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule", "/tmp/auto-spider-beat"]
+
   openhands-agent-server:
     mem_limit: ${AGENT_MEMORY_LIMIT:-2g}
     cpus: ${AGENT_CPU_LIMIT:-2.0}
@@ -116,10 +128,13 @@ services:
       dockerfile: docker/openhands-agent-server.Dockerfile
       args:
         BASE_IMAGE: ${OPENHANDS_BASE_IMAGE:-python:3.12-slim}
-    command: ["python", "-m", "openhands.agent_server", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["python", "-m", "openhands.agent_server", "--host", "0.0.0.0", "--port", "8000", "--import-modules", "auto_spider.ai.browser_server_routes"]
     environment:
       OH_SESSION_API_KEYS_0: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
       OH_SECRET_KEY: ${OPENHANDS_SECRET_KEY:-local-openhands-secret-key}
+      OH_CONVERSATIONS_PATH: /var/lib/auto-spider/openhands/conversations
+      OH_MAX_CONCURRENT_RUNS: ${WORKER_CONCURRENCY:-1}
+      OH_ENABLE_VSCODE: "false"
       LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
       LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-}
       LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL:-}
@@ -129,8 +144,10 @@ services:
     volumes:
       - ./worktrees:/srv/auto_spider/worktrees
       - ./evidence:/srv/auto_spider/evidence
+      - ./agent_policies:/srv/auto_spider/agent_policies:ro
+      - auto-spider-agent-state:/var/lib/auto-spider/openhands
       # OpenHands must see the parent repository's .git/worktrees metadata.
-      - ${AICODING_REPO_HOST_PATH:-.}:/srv/aicoding-collector
+      - ${AICODING_REPO_HOST_PATH:-.}:/srv/aicoding-collector:ro
     healthcheck:
       test:
         [
@@ -149,5 +166,6 @@ services:
         condition: service_healthy
 
 volumes:
+  auto-spider-agent-state:
   auto-spider-mysql:
   auto-spider-redis:

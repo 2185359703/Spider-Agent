@@ -6,12 +6,16 @@ import re
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from auto_spider.config import get_settings
-from auto_spider.db.models import EvidenceFile
+from auto_spider.db.models import AgentExecution, EvidenceFile
+from auto_spider.services.browser_evidence import sanitize_text
 
-SECRET_KEY_RE = re.compile(r"(cookie|authorization|csrf|token|password|secret|session)", re.I)
+SECRET_KEY_RE = re.compile(
+    r"(cookie|authorization|csrf|token|password|secret|session|api_key)", re.I
+)
 
 
 def sanitize(value: Any) -> Any:
@@ -22,8 +26,8 @@ def sanitize(value: Any) -> Any:
         }
     if isinstance(value, list):
         return [sanitize(item) for item in value]
-    if isinstance(value, str) and SECRET_KEY_RE.search(value[:80]):
-        return "[REDACTED]"
+    if isinstance(value, str):
+        return sanitize_text(value)
     return value
 
 
@@ -62,3 +66,44 @@ class EvidenceStore:
         session.add(evidence)
         session.flush()
         return evidence
+
+    def register_browser_files(self, session: Session, *, task_id: str, run_id: str) -> None:
+        """Index already-sanitized CLI captures without overwriting their contents."""
+        root = self.root.resolve()
+        task_root = root / task_id
+        if not task_root.is_dir() or task_root.is_symlink() or root not in task_root.parents:
+            return
+        ids = session.scalars(
+            select(AgentExecution.execution_id).where(
+                AgentExecution.task_id == task_id, AgentExecution.run_id == run_id
+            )
+        ).all()
+        for execution_id in ids:
+            for folder in task_root.glob(f"**/agent-browser/{execution_id}"):
+                if folder.is_symlink() or task_root not in folder.resolve().parents:
+                    continue
+                for file in folder.glob("*.json"):
+                    if file.is_symlink() or file.stat().st_size > get_settings().max_evidence_bytes:
+                        continue
+                    relative = file.relative_to(root).as_posix()
+                    evidence_id = hashlib.sha1(
+                        f"{task_id}:{run_id}:{relative}".encode()
+                    ).hexdigest()[:32]
+                    if session.scalar(
+                        select(EvidenceFile.id).where(EvidenceFile.evidence_id == evidence_id)
+                    ):
+                        continue
+                    content = file.read_bytes()
+                    session.add(
+                        EvidenceFile(
+                            evidence_id=evidence_id,
+                            task_id=task_id,
+                            run_id=run_id,
+                            relative_path=relative,
+                            file_type="browser_cli",
+                            sha256=hashlib.sha256(content).hexdigest(),
+                            size_bytes=len(content),
+                            redaction_status="redacted",
+                        )
+                    )
+        session.flush()

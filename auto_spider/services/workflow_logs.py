@@ -50,9 +50,10 @@ def append_durable_log(
     message: str,
     level: str = "INFO",
     detail: dict[str, Any] | None = None,
+    session_factory=None,
 ) -> None:
     for attempt in range(5):
-        session = SessionLocal()
+        session = (session_factory or SessionLocal)()
         try:
             append_log(
                 session,

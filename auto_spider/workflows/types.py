@@ -15,3 +15,4 @@ class AnalysisResult:
     list_body: dict[str, Any] | None = None
     list_response_file: str | None = None
     list_response_shape: str | None = None
+    spec_draft: dict[str, Any] | None = None

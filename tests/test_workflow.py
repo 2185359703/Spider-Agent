@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from auto_spider.db.models import (
+    CodeSubmission,
     FailureBundle,
     OnboardingBatch,
     OnboardingReport,
@@ -19,7 +20,13 @@ from auto_spider.schemas import (
 from auto_spider.services.tasks import create_manual_run, create_review
 from auto_spider.workflows.graph import build_graph
 from auto_spider.workflows.runner import WorkflowRunner
-from tests.fakes import FakeAnalyzer, FakeCodingGateway, FakeRepairGateway
+from tests.fakes import (
+    FakeAnalyzer,
+    FakeCodingGateway,
+    FakeRepairGateway,
+    fake_publication,
+    fake_validation,
+)
 
 
 def make_task(session, url: str = "https://example.com/jobs?fixture=jobs") -> OnboardingTask:
@@ -51,6 +58,8 @@ def fake_runner() -> WorkflowRunner:
         analyzer=FakeAnalyzer(),
         coder=FakeCodingGateway(),
         repairer=FakeRepairGateway(),
+        validator=fake_validation,
+        publisher=fake_publication,
     )
 
 
@@ -89,16 +98,28 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
     runner = fake_runner()
     runner.evidence.root = tmp_path / "evidence"
     runner.run_onboarding(db_session, task.task_id)
+    candidate = db_session.query(CodeSubmission).one().commit_sha
     manual = create_manual_run(
         db_session,
         task,
         ManualRunRequest(
-            code_revision="simulated",
+            code_revision=candidate,
             environment_fingerprint="test",
             started_at=datetime.now(UTC),
             finished_at=datetime.now(UTC),
             artifact_manifest_ref="evidence/manual/manifest.json",
             client_request_id="manual-review-0001",
+            result={
+                "samples": [
+                    {
+                        "source_id": "intern-1",
+                        "title": "实习岗位",
+                        "description": "岗位描述",
+                        "source_url": "https://example.com/jobs/intern-1",
+                        "location": None,
+                    }
+                ]
+            },
         ),
     )
     _, bundle = create_review(
@@ -107,7 +128,7 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
         ManualReviewRequest(
             review_status=ReviewStatus.CODE_FIX_REQUIRED,
             manual_run_id=manual.manual_run_id,
-            code_revision="simulated",
+            code_revision=candidate,
             issue_summary="地点字段为空",
             field_issues=[
                 ReviewFieldIssue(
@@ -118,9 +139,7 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
                     code_fixable=True,
                 )
             ],
-            sample_decisions=[
-                ReviewSampleDecision(sample_index=1, status="ISSUE", issue_refs=[0])
-            ],
+            sample_decisions=[ReviewSampleDecision(sample_index=1, status="ISSUE", issue_refs=[0])],
             client_request_id="review-0001",
         ),
     )
@@ -131,8 +150,7 @@ def test_manual_review_creates_failure_bundle_and_repair_candidate(
     assert refreshed.status == "WAITING_MANUAL_RUN"
     assert db_session.query(FailureBundle).one().status == "REPAIRED"
     assert (
-        db_session.query(FailureBundle).one().bundle_json["field_issues"][0]["field"]
-        == "location"
+        db_session.query(FailureBundle).one().bundle_json["field_issues"][0]["field"] == "location"
     )
     assert (
         db_session.query(FailureBundle).one().bundle_json["sample_decisions"][0]["status"]

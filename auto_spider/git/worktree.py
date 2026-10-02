@@ -53,6 +53,21 @@ class WorktreeManager:
                 mutation_enabled=False,
             )
         path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+
+            def read_git(*args):
+                return subprocess.run(
+                    ["git", "-C", str(path), *args], check=True, capture_output=True, text=True
+                ).stdout.strip()
+
+            common = Path(read_git("rev-parse", "--path-format=absolute", "--git-common-dir"))
+            expected = (inspection.path / ".git").resolve()
+            if (
+                common.resolve() != expected
+                or read_git("rev-parse", "HEAD") != verified_ref.stdout.strip()
+            ):
+                raise RuntimeError("WORKTREE_RESUME_MISMATCH")
+            return WorktreeContext(path, verified_ref.stdout.strip(), False, True)
         subprocess.run(
             [
                 "git",
@@ -71,7 +86,7 @@ class WorktreeManager:
         )
         return WorktreeContext(
             path=path,
-            baseline_ref=baseline_ref,
+            baseline_ref=verified_ref.stdout.strip(),
             created=True,
             mutation_enabled=True,
         )

@@ -1,45 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, TypedDict
-
-try:
-    from langgraph.graph import END, START, StateGraph
-except ImportError:  # pragma: no cover - exercised when runner dependency is absent
-    END = START = StateGraph = None
+from langgraph.graph import END, START, StateGraph
 
 
-class WorkflowGraphState(TypedDict, total=False):
-    task_id: str
-    run_id: str
-    node: str
-    observation: dict[str, Any]
-    spec: dict[str, Any]
-    changed_files: list[str]
-    validation: dict[str, Any]
-    report_id: str
-    next_action: str
-    failure_bundle_id: str
-
-
-def build_graph():
-    """Build the deterministic graph used by the worker once LangGraph is installed.
-
-    Database writes remain in WorkflowRunner; these nodes only carry typed state.
-    That separation makes replay and unit testing safe.
-    """
-
-    if StateGraph is None:
-        return None
-
-    builder = StateGraph(WorkflowGraphState)
-
-    def mark(name: str):
-        def node(state: WorkflowGraphState) -> WorkflowGraphState:
-            return {**state, "node": name}
-
-        return node
-
-    nodes = [
+def build_graph(execute=None, checkpointer=None):
+    """Actual conditional workflow, with persisted interrupts for human review."""
+    builder = StateGraph(dict)
+    nodes = (
         "normalize_input",
         "inspect_site",
         "build_spec",
@@ -54,12 +21,39 @@ def build_graph():
         "diagnose_failure",
         "patch_code",
         "run_regression",
-        "submit_fix",
-    ]
+        "close",
+    )
     for name in nodes:
-        builder.add_node(name, mark(name))
-    builder.add_edge(START, nodes[0])
-    for current, following in zip(nodes, nodes[1:], strict=False):
-        builder.add_edge(current, following)
-    builder.add_edge(nodes[-1], END)
-    return builder.compile()
+
+        def node(state, name=name):
+            return execute(name, state) if execute else {**state, "node": name}
+
+        builder.add_node(name, node)
+    builder.add_edge(START, "normalize_input")
+    builder.add_conditional_edges(
+        "normalize_input", lambda s: "build_spec" if s.get("kind") == "repair" else "inspect_site"
+    )
+    builder.add_edge("inspect_site", "build_spec")
+    builder.add_conditional_edges(
+        "build_spec",
+        lambda s: (
+            "build_report"
+            if s.get("skip_generation")
+            else "diagnose_failure"
+            if s.get("kind") == "repair"
+            else "generate_code"
+        ),
+    )
+    builder.add_edge("generate_code", "run_validation")
+    builder.add_edge("run_validation", "build_report")
+    builder.add_edge("run_regression", "build_report")
+    builder.add_edge("build_report", "report_gate")
+    builder.add_conditional_edges("report_gate", lambda s: s["route"])
+    builder.add_edge("build_failure_bundle", "diagnose_failure")
+    builder.add_conditional_edges("diagnose_failure", lambda s: s["route"])
+    builder.add_edge("patch_code", "run_regression")
+    builder.add_edge("commit_candidate", "await_manual_run")
+    builder.add_edge("await_manual_run", "record_review")
+    builder.add_edge("record_review", END)
+    builder.add_edge("close", END)
+    return builder.compile(checkpointer=checkpointer)

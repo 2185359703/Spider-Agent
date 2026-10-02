@@ -16,7 +16,9 @@ evidence/
 output/
 .playwright-cli/
 worktrees/
+agent_policies/
 logs/
 *.log
 node_modules/
+.idea/
 alembic/versions/*.pyc

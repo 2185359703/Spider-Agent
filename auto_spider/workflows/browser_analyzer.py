@@ -14,7 +14,7 @@ class BrowserAnalyzer:
     """Turn bounded Playwright evidence into a conservative analysis result."""
 
     def __init__(self, collector: BrowserEvidenceCollector | None = None) -> None:
-        self.collector = collector or BrowserEvidenceCollector()
+        self.collector = collector
 
     def inspect(
         self,
@@ -22,10 +22,19 @@ class BrowserAnalyzer:
         platform_key: str,
         task_id: str | None = None,
         run_id: str | None = None,
+        execution=None,
+        event_callback=None,
     ) -> AnalysisResult:
         settings = get_settings()
+        if self.collector is None and execution is not None and settings.agent_browser_enabled:
+            from auto_spider.workflows.agent_site_analyzer import inspect_with_agent
+
+            return inspect_with_agent(
+                entry_url, platform_key, task_id, run_id, execution, event_callback
+            )
+        collector = self.collector or BrowserEvidenceCollector()
         evidence_root = settings.evidence_root / (task_id or "browser") / (run_id or "run")
-        result = self.collector.capture(entry_url, evidence_root / "browser")
+        result = collector.capture(entry_url, evidence_root / "browser")
         network_path = evidence_root / "browser" / "network.json"
         network = json.loads(network_path.read_text(encoding="utf-8"))
         page_html = (evidence_root / "browser" / "page.html").read_text(

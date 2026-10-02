@@ -4,7 +4,6 @@ import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
-from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,9 +14,11 @@ from auto_spider.ai.skill_loader import (
     load_collector_agent_skill,
     load_spider_king_agent_skill,
 )
+from auto_spider.api.admin import router as admin_router
 from auto_spider.api.deps import AdminActor, CurrentActor, DbSession, OperatorActor, ReviewerActor
 from auto_spider.config import get_settings
 from auto_spider.db.models import (
+    AgentExecution,
     CodeSubmission,
     EvidenceFile,
     FailureBundle,
@@ -28,6 +29,7 @@ from auto_spider.db.models import (
     PlatformSpec,
     PolicyVersion,
     RepairRun,
+    WorkflowCheckpoint,
     WorkflowEvent,
     WorkflowLog,
     WorkflowRun,
@@ -44,7 +46,9 @@ from auto_spider.schemas import (
     ResumeRequest,
     TaskResponse,
 )
+from auto_spider.services.dispatch import queue_workflow
 from auto_spider.services.evidence import sanitize
+from auto_spider.services.run_control import control_run
 from auto_spider.services.tasks import (
     create_batch,
     create_manual_run,
@@ -53,15 +57,14 @@ from auto_spider.services.tasks import (
     latest_report,
 )
 from auto_spider.services.workflow_logs import append_durable_log
-from auto_spider.workers.tasks import run_onboarding, run_repair
+from auto_spider.workers.tasks import recover_dispatches
 
 app = FastAPI(title="AI Recruitment Collector Onboarding", version="0.1.0")
+app.include_router(admin_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        origin.strip()
-        for origin in get_settings().frontend_origins.split(",")
-        if origin.strip()
+        origin.strip() for origin in get_settings().frontend_origins.split(",") if origin.strip()
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -82,9 +85,9 @@ def enqueue_onboarding(task_id: str) -> None:
         },
     )
     if settings.auto_spider_eager_workflow:
-        run_onboarding(task_id)
-    elif settings.queue_enabled and hasattr(run_onboarding, "delay"):
-        run_onboarding.delay(task_id)
+        recover_dispatches()
+    elif settings.queue_enabled:
+        _wake_dispatcher(task_id)
 
 
 def enqueue_repair(task_id: str, bundle_id: str) -> None:
@@ -97,9 +100,23 @@ def enqueue_repair(task_id: str, bundle_id: str) -> None:
         detail={"bundle_id": bundle_id, "eager": settings.auto_spider_eager_workflow},
     )
     if settings.auto_spider_eager_workflow:
-        run_repair(task_id, bundle_id)
-    elif settings.queue_enabled and hasattr(run_repair, "delay"):
-        run_repair.delay(task_id, bundle_id)
+        recover_dispatches()
+    elif settings.queue_enabled:
+        _wake_dispatcher(task_id)
+
+
+def _wake_dispatcher(task_id):
+    try:
+        recover_dispatches.delay()
+    except Exception:
+        # Creation already committed an outbox entry. Beat retries delivery.
+        append_durable_log(
+            task_id=task_id,
+            run_id=None,
+            stage="queue",
+            level="WARNING",
+            message="队列暂不可用，任务已保存，等待后台重新投递",
+        )
 
 
 @app.get("/healthz")
@@ -498,6 +515,12 @@ def read_task(task_id: str, session: DbSession, actor: CurrentActor) -> TaskResp
 @app.get("/api/v1/onboarding/tasks/{task_id}/timeline")
 def task_timeline(task_id: str, session: DbSession, actor: CurrentActor) -> dict:
     _require_task(session, task_id)
+    checkpoints = session.scalars(
+        select(WorkflowCheckpoint)
+        .where(WorkflowCheckpoint.task_id == task_id)
+        .order_by(WorkflowCheckpoint.id.desc())
+        .limit(500)
+    ).all()
     events = session.scalars(
         select(WorkflowEvent)
         .where(WorkflowEvent.task_id == task_id)
@@ -509,6 +532,22 @@ def task_timeline(task_id: str, session: DbSession, actor: CurrentActor) -> dict
         .order_by(WorkflowRun.started_at.asc())
     ).all()
     return {
+        "checkpoints": [
+            {
+                "run_id": row.run_id,
+                "node": row.node,
+                "revision": row.revision,
+                "completed": True,
+                "passed": row.state_json.get("passed")
+                if "passed" in row.state_json
+                else (
+                    row.state_json.get("technical_status") == "PASS"
+                    if "technical_status" in row.state_json
+                    else None
+                ),
+            }
+            for row in reversed(checkpoints)
+        ],
         "events": [
             {
                 "event_id": row.event_id,
@@ -611,7 +650,12 @@ def register_manual_run(
     actor: OperatorActor,
 ) -> dict:
     task = _require_task(session, task_id)
-    manual = create_manual_run(session, task, request)
+    try:
+        manual = create_manual_run(session, task, request)
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    enqueue_onboarding(task_id)
     return {"manual_run_id": manual.manual_run_id, "status": manual.status}
 
 
@@ -619,9 +663,7 @@ def register_manual_run(
 def list_manual_runs(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
     _require_task(session, task_id)
     rows = session.scalars(
-        select(ManualRun)
-        .where(ManualRun.task_id == task_id)
-        .order_by(ManualRun.created_at.desc())
+        select(ManualRun).where(ManualRun.task_id == task_id).order_by(ManualRun.created_at.desc())
     ).all()
     return [
         {
@@ -686,9 +728,15 @@ def submit_review(
     actor: ReviewerActor,
 ) -> dict:
     task = _require_task(session, task_id)
-    review, bundle = create_review(session, task, request)
+    try:
+        review, bundle = create_review(session, task, request, actor_id=actor.user_id)
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if bundle is not None:
         enqueue_repair(task_id, bundle.bundle_id)
+    else:
+        enqueue_onboarding(task_id)
     return {
         "review_id": review.review_id,
         "failure_bundle_id": bundle.bundle_id if bundle else None,
@@ -726,9 +774,7 @@ def list_reviews(task_id: str, session: DbSession, actor: CurrentActor) -> list[
 def list_repairs(task_id: str, session: DbSession, actor: CurrentActor) -> list[dict]:
     _require_task(session, task_id)
     rows = session.scalars(
-        select(RepairRun)
-        .where(RepairRun.task_id == task_id)
-        .order_by(RepairRun.created_at.desc())
+        select(RepairRun).where(RepairRun.task_id == task_id).order_by(RepairRun.created_at.desc())
     ).all()
     return [
         {
@@ -777,49 +823,59 @@ def resume_task(
     session: DbSession,
     actor: OperatorActor,
 ) -> dict:
-    task = _require_task(session, task_id)
-    idempotency_key = f"{task_id}:resume:{request.client_request_id}"
-    previous = session.scalar(
-        select(WorkflowEvent).where(WorkflowEvent.idempotency_key == idempotency_key)
-    )
-    if previous is not None:
-        return {
-            "task_id": task_id,
-            "status": task.status,
-            "run_id": task.current_run_id,
-            "idempotent": True,
+    return _control_task(session, task_id, "RESUME", request.client_request_id)
+
+
+def _control_task(session, task_id, action, request_id):
+    _require_task(session, task_id)
+    try:
+        result = control_run(session, task_id, action, request_id)
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result.pop("enqueue", False):
+        enqueue_onboarding(task_id)
+    return result
+
+
+@app.post("/api/v1/onboarding/tasks/{task_id}/pause")
+def pause_task(task_id: str, request: ResumeRequest, session: DbSession, actor: OperatorActor):
+    return _control_task(session, task_id, "PAUSE", request.client_request_id)
+
+
+@app.post("/api/v1/onboarding/tasks/{task_id}/cancel")
+def cancel_task(task_id: str, request: ResumeRequest, session: DbSession, actor: OperatorActor):
+    return _control_task(session, task_id, "CANCEL", request.client_request_id)
+
+
+@app.post("/api/v1/onboarding/tasks/{task_id}/retry")
+def retry_task(task_id: str, request: ResumeRequest, session: DbSession, actor: OperatorActor):
+    return _control_task(session, task_id, "RETRY", request.client_request_id)
+
+
+@app.get("/api/v1/onboarding/tasks/{task_id}/executions")
+def agent_executions(task_id: str, session: DbSession, actor: CurrentActor):
+    _require_task(session, task_id)
+    return [
+        {
+            "execution_id": row.execution_id,
+            "run_id": row.run_id,
+            "conversation_id": row.conversation_id,
+            "step": row.step_key,
+            "mode": row.mode,
+            "status": row.status,
+            "workspace": row.workspace_path,
+            "prompt_hash": row.prompt_hash,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "error_message": row.error_message,
         }
-    active_run = None
-    if task.status in {"SUBMITTED", "ANALYZING", "REPAIRING"} and task.current_run_id:
-        active_run = session.scalar(
-            select(WorkflowRun).where(
-                WorkflowRun.task_id == task_id,
-                WorkflowRun.run_id == task.current_run_id,
-                WorkflowRun.status == "RUNNING",
-            )
+        for row in session.scalars(
+            select(AgentExecution)
+            .where(AgentExecution.task_id == task_id)
+            .order_by(AgentExecution.created_at)
         )
-    if active_run is not None:
-        return {
-            "task_id": task_id,
-            "status": task.status,
-            "run_id": active_run.run_id,
-            "idempotent": True,
-        }
-    task.status = "SUBMITTED"
-    task.next_action = "CREATE_CANDIDATE"
-    session.add(
-        WorkflowEvent(
-            event_id=uuid4().hex,
-            event_type="RESUME_REQUESTED",
-            task_id=task_id,
-            run_id=task.current_run_id,
-            idempotency_key=idempotency_key,
-            payload_json={"client_request_id": request.client_request_id},
-        )
-    )
-    session.commit()
-    enqueue_onboarding(task_id)
-    return {"task_id": task_id, "status": task.status, "idempotent": False}
+    ]
 
 
 @app.post("/api/v1/onboarding/tasks/{task_id}/repair")
@@ -832,6 +888,19 @@ def repair_task(
     _require_task(session, task_id)
     if not request.failure_bundle_id:
         raise HTTPException(status_code=400, detail="failure_bundle_id 必填")
+    bundle = session.scalar(
+        select(FailureBundle).where(
+            FailureBundle.task_id == task_id, FailureBundle.bundle_id == request.failure_bundle_id
+        )
+    )
+    if bundle is None:
+        raise HTTPException(status_code=404, detail="失败包不存在或不属于该任务")
+    if bundle.status == "REPAIRED":
+        return {"task_id": task_id, "status": "WAITING_MANUAL_RUN", "idempotent": True}
+    if bundle.review_id is None:
+        raise HTTPException(status_code=409, detail="AUTO_FAILURE_RESUME_ORIGINAL_RUN")
+    queue_workflow(session, task_id, f"repair:{request.client_request_id}", bundle.bundle_id)
+    session.commit()
     enqueue_repair(task_id, request.failure_bundle_id)
     return {"task_id": task_id, "status": "REPAIRING"}
 

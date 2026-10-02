@@ -8,9 +8,12 @@ from auto_spider.db.base import Base
 
 
 @pytest.fixture(autouse=True)
-def deterministic_workflow_settings(monkeypatch: pytest.MonkeyPatch):
+def deterministic_workflow_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Keep tests offline even when a developer's .env enables OpenHands."""
     monkeypatch.setenv("QUEUE_ENABLED", "false")
+    monkeypatch.setenv("EVIDENCE_ROOT", str(tmp_path / "evidence"))
+    monkeypatch.setenv("WORKTREE_ROOT", str(tmp_path / "worktrees"))
+    monkeypatch.setenv("AGENT_POLICY_ROOT", str(tmp_path / "agent-policies"))
     from auto_spider.config import get_settings
 
     get_settings.cache_clear()

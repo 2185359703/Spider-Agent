@@ -2,7 +2,7 @@
 name: spider-king-collector
 description: Recover a real web data protocol from captured browser evidence and deliver a repeatable browser-free Python collector.
 metadata:
-  version: "1.0.0-adapter"
+  version: "1.1.0-cli-adapter"
   upstream: "spider-king"
 ---
 
@@ -10,7 +10,15 @@ metadata:
 
 This is the OpenHands-compatible collector subset of the local `spider-king` skill. Use it for recruitment pages whose useful data passes through dynamic APIs, encrypted/encoded responses, bootstrap state, signatures, cookies, GraphQL, protobuf, WebSocket or route-changing pagination.
 
-The control plane already owns browser evidence collection. Do not look for unavailable Codex MCP tools. Start from the supplied evidence directory, then use bounded public HTTP probes to confirm the protocol.
+Start from the supplied evidence directory. `CollectorBrowserTool` exposes task-isolated Playwright CLI on the Agent Server. When the list/detail endpoint, response format, decoder, pagination or hard fields are uncertain, actively open the recruitment entry, take a snapshot, interact with internship filters/pagination, inspect numbered requests and real response bodies, and save the returned evidence references. The same tool is available during repairs. Do not look for unrelated Codex MCP tools or assume a terminal exists.
+
+## Browser session ownership
+
+- One onboarding batch reuses one Playwright CLI browser process. A company gets its own page while it is the active evidence owner; never interleave two companies' navigation or network inspection. Finish or retain the current company's session chain before another company takes ownership.
+- `open` acquires a company page in the existing batch browser. `close` releases that company's page, not the shared browser process. The platform closes the batch browser after all companies finish the development/validation phase. Do not launch a fresh browser for every company.
+- Paused or disconnected executions retain the current company page/session chain until resumed or explicitly cancelled. Do not discard unique bootstrap state as cache. Other companies must wait while that page is retained.
+- First use saved evidence when sufficient. Otherwise capture a clean page/network baseline, prove the real business endpoint, inspect request/response and static scripts when needed, then verify one browser-free HTTP replay before scaling.
+- CLI currently provides page and wire evidence. It does not provide the full chrome-devtools + js-reverse debugger handoff of the upstream skill. If runtime breakpoint/initiator evidence is required but unavailable, identify that capability gap instead of claiming it was traced.
 
 ## Auto judge
 
@@ -25,6 +33,7 @@ Tag the smallest dominant gate: `decode-gated`, `signer-gated`, `session-gated`,
 ## Protocol recovery loop
 
 1. Fingerprint the entry, bootstrap, list, detail, pagination and telemetry routes separately.
+   A recruitment entry returning HTML, an XML/text endpoint, or an encoded response is not automatically a failure. Establish the expected wire format before choosing a parser. Never substitute the entry URL for an unconfirmed JSON API.
 2. Prove one request that returns useful business data before implementing pagination or concurrency.
 3. Freeze the raw response and locate its first real consumer before attempting decode.
 4. Isolate every moving value: timestamp, nonce, cursor, cookie, wrapper field, decode key, session state or route pivot.

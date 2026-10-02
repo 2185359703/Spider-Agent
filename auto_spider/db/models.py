@@ -25,6 +25,7 @@ class OnboardingBatch(Base):
     accepted_count: Mapped[int] = mapped_column(Integer, default=0)
     rejected_count: Mapped[int] = mapped_column(Integer, default=0)
     created_by: Mapped[str] = mapped_column(String(128), default="dev-user")
+    intake_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -70,6 +71,11 @@ class WorkflowRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_key: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    control: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    repair_attempt: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    context_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
 class PlatformSpec(Base):
@@ -280,3 +286,99 @@ class WorkflowCheckpoint(Base):
     revision: Mapped[int] = mapped_column(Integer)
     state_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class GraphCheckpoint(Base):
+    __tablename__ = "graph_checkpoints"
+
+    checkpoint_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    thread_id: Mapped[str] = mapped_column(String(32), index=True)
+    namespace: Mapped[str] = mapped_column(String(255), default="")
+    checkpoint_id: Mapped[str] = mapped_column(String(64), index=True)
+    parent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class GraphWrite(Base):
+    __tablename__ = "graph_writes"
+
+    write_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    checkpoint_key: Mapped[str] = mapped_column(String(64), index=True)
+    thread_id: Mapped[str] = mapped_column(String(32), index=True)
+    graph_task_id: Mapped[str] = mapped_column(String(64))
+    index: Mapped[int] = mapped_column(Integer)
+    channel: Mapped[str] = mapped_column(String(255))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+class WorkflowStep(Base):
+    """Journal side effects before acknowledging a LangGraph node."""
+
+    __tablename__ = "workflow_steps"
+    __table_args__ = (UniqueConstraint("run_id", "step_key", name="uk_run_step"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("workflow_runs.run_id"), index=True)
+    step_key: Mapped[str] = mapped_column(String(128))
+    result_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ExecutionLease(Base):
+    __tablename__ = "execution_leases"
+
+    resource_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(32), index=True)
+    owner: Mapped[str] = mapped_column(String(32))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AgentExecution(Base):
+    __tablename__ = "agent_executions"
+    __table_args__ = (UniqueConstraint("run_id", "step_key", name="uk_agent_run_step"),)
+
+    execution_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("onboarding_tasks.task_id"), index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("workflow_runs.run_id"), index=True)
+    step_key: Mapped[str] = mapped_column(String(128))
+    conversation_id: Mapped[str] = mapped_column(String(36), unique=True)
+    workspace_path: Mapped[str] = mapped_column(String(1024))
+    server_url: Mapped[str] = mapped_column(String(1024))
+    prompt_hash: Mapped[str] = mapped_column(String(64))
+    mode: Mapped[str] = mapped_column(String(20), default="write")
+    status: Mapped[str] = mapped_column(String(30), default="CREATED")
+    result_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class WorkflowDispatch(Base):
+    __tablename__ = "workflow_dispatches"
+
+    dispatch_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("onboarding_tasks.task_id"), index=True)
+    bundle_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class CollectionDispatch(Base):
+    """Outbox and fenced execution receipt for an explicitly requested collection."""
+
+    __tablename__ = "collection_dispatches"
+
+    manual_run_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("manual_runs.manual_run_id"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    owner: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

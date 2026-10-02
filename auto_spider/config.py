@@ -13,12 +13,8 @@ class Settings(BaseSettings):
     worktree_root: Path = Path("./worktrees")
     collector_agent_skill_path: Path = Path("./agent_skills/collector-onboarding")
     spider_king_agent_skill_path: Path = Path("./agent_skills/spider-king-collector")
-    collector_source_repo_path: Path = Path(
-        r"D:\Project\Auto_spider_repositories\fun-crawler-v2"
-    )
-    aicoding_repo_path: Path = Path(
-        r"D:\Project\Auto_spider_repositories\aicoding-auto_spider"
-    )
+    collector_source_repo_path: Path = Path(r"D:\Project\Auto_spider_repositories\fun-crawler-v2")
+    aicoding_repo_path: Path = Path(r"D:\Project\Auto_spider_repositories\aicoding-auto_spider")
     collector_repo_path: Path | None = None
     collector_source_baseline_ref: str = "16cba8439396e371973e4ee0301d3a88f2f32ba5"
     aicoding_baseline_ref: str = "c932dbac4bb75df04008c85d3560c1b7a28ec211"
@@ -39,7 +35,16 @@ class Settings(BaseSettings):
     auto_spider_eager_workflow: bool = False
     queue_enabled: bool = False
     worker_concurrency: int = Field(default=1, ge=1)
-    max_repair_attempts: int = 3
+    max_repair_attempts: int = Field(default=3, ge=0, le=10)
+    max_spec_repair_attempts: int = Field(default=2, ge=0, le=5)
+    execution_lease_seconds: int = Field(default=60, ge=15)
+    execution_heartbeat_seconds: int = Field(default=5, ge=1)
+    execution_timeout_seconds: int = Field(default=3600, ge=30)
+    agent_poll_seconds: float = Field(default=2, ge=0.1)
+    agent_max_iterations: int = Field(default=100, ge=1, le=500)
+    agent_policy_root: Path = Path("./agent_policies")
+    agent_browser_enabled: bool = True
+    openhands_policy_root: str = "/srv/auto_spider/agent_policies"
     max_evidence_bytes: int = 5_000_000
 
     model_config = SettingsConfigDict(

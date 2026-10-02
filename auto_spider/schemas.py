@@ -204,8 +204,51 @@ class EndpointsSpec(PlatformSpecModel):
 
 
 class PaginationSpec(PlatformSpecModel):
+    model_config = {
+        "json_schema_extra": {
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {"mode": {"enum": ["page", "offset"]}},
+                        "required": ["mode"],
+                    },
+                    "then": {
+                        "required": ["page_param"],
+                        "properties": {"page_param": {"type": "string", "minLength": 1}},
+                    },
+                },
+                {
+                    "if": {"properties": {"mode": {"const": "cursor"}}, "required": ["mode"]},
+                    "then": {
+                        "required": ["cursor_param"],
+                        "properties": {"cursor_param": {"type": "string", "minLength": 1}},
+                    },
+                },
+                {
+                    "if": {"properties": {"mode": {"const": "next_url"}}, "required": ["mode"]},
+                    "then": {
+                        "required": ["next_url_selector"],
+                        "properties": {"next_url_selector": {"type": "object"}},
+                    },
+                },
+                {
+                    "if": {
+                        "properties": {"mode": {"not": {"const": "none"}}},
+                        "required": ["mode"],
+                    },
+                    "then": {
+                        "required": ["termination"],
+                        "properties": {"termination": {"minItems": 1}},
+                    },
+                },
+            ]
+        }
+    }
     mode: PaginationMode = PaginationMode.NONE
-    page_param: str | None = None
+    page_param: str | None = Field(
+        default=None,
+        description="page/offset 模式均必填，例如 page 或 offset；offset 不使用 cursor_param。",
+    )
     size_param: str | None = None
     cursor_param: str | None = None
     next_url_selector: SelectorSpec | None = None
@@ -530,7 +573,7 @@ class IntakeItem(BaseModel):
 
 
 class CreateBatchRequest(BaseModel):
-    items: list[IntakeItem] = Field(min_length=1, max_length=100)
+    items: list[IntakeItem] = Field(min_length=1, max_length=5000)
     analysis_profile: str = Field(default="internship-http-v1", max_length=64)
     dry_run: bool = False
     client_request_id: str = Field(min_length=8, max_length=128)

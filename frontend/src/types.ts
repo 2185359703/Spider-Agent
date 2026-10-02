@@ -1,11 +1,20 @@
 export type TaskStatus =
+  | "NO_DATA_CONFIRMED"
   | "SUBMITTED"
   | "ANALYZING"
   | "WAITING_MANUAL_RUN"
   | "WAITING_MANUAL_REVIEW"
   | "REPAIRING"
   | "ADOPTED"
-  | "BLOCKED";
+  | "BLOCKED"
+  | "PAUSE_REQUESTED"
+  | "CANCEL_REQUESTED"
+  | "PAUSED"
+  | "CANCELLED"
+  | "FAILED"
+  | "TIMED_OUT"
+  | "INTERRUPTED"
+  | "REJECTED";
 
 export type ObservationCode =
   | "INTERNSHIPS_FOUND"
@@ -222,6 +231,7 @@ export interface WorkflowRunSummary {
 }
 
 export interface TaskTimeline {
+  checkpoints?: Array<{ run_id: string; node: string; revision: number; passed?: boolean | null }>;
   events: TimelineEvent[];
   runs: WorkflowRunSummary[];
 }

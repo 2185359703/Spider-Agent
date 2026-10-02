@@ -5,6 +5,7 @@ __pycache__
 .ruff_cache
 evidence
 worktrees
+agent_policies
 node_modules
 **/node_modules
 .venv

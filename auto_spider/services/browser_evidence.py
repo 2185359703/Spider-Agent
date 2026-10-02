@@ -24,10 +24,13 @@ SECRET_HEADER_KEYS = re.compile(
     re.IGNORECASE,
 )
 SECRET_TEXT_PATTERNS = (
+    re.compile(r"(?i)(Authorization\s*:\s*(?:Bearer|Basic)\s+)[A-Za-z0-9._~+/=-]+"),
+    re.compile(r"(?im)(^\s*Cookie\s*:\s*)[^\r\n]+"),
     re.compile(
-        r"(?i)(['\"]?(?:token|authorization|csrf|session|password|secret)['\"]?\s*[:=]\s*['\"])[^'\"]+"
+        r"(?i)(['\"]?(?:[a-z0-9_]*(?:token|api_key|password|secret)|"
+        r"authorization|csrf|session|cookie)['\"]?\s*[:=]\s*['\"])[^'\"]+"
     ),
-    re.compile(r"(?i)([?&](?:token|signature|csrf|session|code)=[^&\s]+)"),
+    re.compile(r"(?i)([?&](?:token|signature|csrf|session|api_key|code)=)[^&\s\"']+"),
 )
 
 

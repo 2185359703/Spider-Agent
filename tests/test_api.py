@@ -326,13 +326,16 @@ def test_resume_is_idempotent_and_ignores_stale_running_rows(db_session, monkeyp
         run_id="run-resume-stale",
         task_id=stale_task.task_id,
         run_type="onboarding",
-        status="RUNNING",
+        status="FAILED",
+        execution_key="onboarding:task-resume-stale",
     )
     active_run = WorkflowRun(
         run_id="run-resume-active",
         task_id=active_task.task_id,
         run_type="onboarding",
         status="RUNNING",
+        execution_key="onboarding:task-resume-active",
+        heartbeat_at=datetime.now(UTC),
     )
     db_session.add_all([batch, stale_task, active_task, stale_run, active_run])
     db_session.commit()
