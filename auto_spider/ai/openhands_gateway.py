@@ -149,13 +149,16 @@ class OpenHandsGateway:
                 record.conversation_id,
                 record.status,
             )
-        llm_kwargs = {"model": gateway.model, "stream": True}
+        llm_kwargs = {"model": gateway.runtime_model(), "stream": True}
         if gateway.base_url:
             llm_kwargs["base_url"] = gateway.base_url
         if gateway.api_mode:
             llm_kwargs["api_mode"] = gateway.api_mode
         if gateway.api_key:
             llm_kwargs["api_key"] = SecretStr(gateway.api_key)
+        extra_headers = gateway.extra_headers(conversation_id)
+        if extra_headers:
+            llm_kwargs["extra_headers"] = extra_headers
         llm = LLM(**llm_kwargs)
         policy_root = settings.agent_policy_root.resolve()
         policy_root.mkdir(parents=True, exist_ok=True)

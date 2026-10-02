@@ -24,6 +24,18 @@ class GatewayConfig:
     api_mode: str
     api_key: str | None
 
+    def extra_headers(self, session_id: str) -> dict[str, str]:
+        """OpenCode Go routes coding-agent traffic by a stable conversation header."""
+        if self.provider == "opencode_zen" and self.base_url and "/zen/go/" in self.base_url:
+            return {"x-opencode-session": session_id}
+        return {}
+
+    def runtime_model(self) -> str:
+        """Return the LiteLLM provider-qualified name without changing the public model ID."""
+        if self.provider == "opencode_zen" and "/" not in self.model:
+            return f"openai/{self.model}"
+        return self.model
+
     def snapshot(self) -> dict[str, str | None]:
         return {
             "profile": self.profile,

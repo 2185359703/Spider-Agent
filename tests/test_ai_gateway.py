@@ -15,8 +15,9 @@ def test_opencode_profile_resolves_without_exposing_key(monkeypatch):
     config = resolve_gateway_config(settings)
     assert config.profile == "opencode_zen"
     assert config.model == "deepseek-v4.1-flash"
+    assert config.runtime_model() == "openai/deepseek-v4.1-flash"
     assert config.api_mode == "chat"
-    assert config.base_url == "https://opencode.ai/zen/v1"
+    assert config.base_url == "https://opencode.ai/zen/go/v1"
     assert config.api_key == "test-secret"
 
 
@@ -29,6 +30,15 @@ def test_gateway_snapshot_keeps_old_model_after_profile_switch(monkeypatch):
     assert resumed.model == old.model
     assert resumed.base_url == old.base_url
     assert resumed.api_key == "new-secret"
+
+
+def test_opencode_go_uses_stable_session_header(monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "opencode_base_url", "https://opencode.ai/zen/go/v1")
+    config = resolve_gateway_config(settings, profile_override="opencode_zen")
+    assert config.extra_headers("conversation-123") == {
+        "x-opencode-session": "conversation-123"
+    }
 
 
 def test_admin_can_switch_gateway_when_idle(db_session, monkeypatch):

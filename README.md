@@ -122,12 +122,14 @@ OpenCode Zen 配置示例：
 
 ```dotenv
 AI_GATEWAY_PROFILE=opencode_zen
-OPENCODE_BASE_URL=https://opencode.ai/zen/v1
+OPENCODE_BASE_URL=https://opencode.ai/zen/go/v1
 OPENCODE_MODEL=deepseek-v4.1-flash
 OPENCODE_API_MODE=chat
 OPENCODE_API_KEY=只放在本机 .env，不要提交
 ```
 
-OpenCode Zen 使用 OpenAI 兼容的 `/v1/chat/completions` 接口。切换前必须在 `.env` 配置凭证，
+OpenCode Zen/Go 使用 OpenAI 兼容的 `/v1/chat/completions` 接口。Go 地址通常为
+`https://opencode.ai/zen/go/v1`，平台会自动为每个 Agent 会话发送稳定的
+`x-opencode-session`；普通 Zen 地址可使用 `https://opencode.ai/zen/v1`。切换前必须在 `.env` 配置凭证，
 然后执行 `docker compose up -d --build api worker scheduler`。系统设置页不会显示 API key；
 数据库只保存当前 profile 名称，AgentExecution 保存模型、地址和 API 模式快照。
