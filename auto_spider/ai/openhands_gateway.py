@@ -123,6 +123,17 @@ class OpenHandsGateway:
                     result_json={},
                 )
                 session.add(record)
+            elif record.status in {"DISCONNECTED", "FAILED", "ERROR"}:
+                # Never reuse a remote conversation after a transport or
+                # provider failure.  OpenCode may have persisted a half-way
+                # thinking turn that cannot be replayed; rotate only the
+                # conversation identity while retaining this execution row as
+                # the audit history.
+                record.prompt_hash = digest
+                record.mode = "read" if review_only else "write"
+                record.conversation_id = str(uuid4())
+                record.status = "CREATED"
+                record.result_json = {}
             elif record.prompt_hash != digest or record.mode != (
                 "read" if review_only else "write"
             ):
@@ -150,6 +161,24 @@ class OpenHandsGateway:
                 record.status,
             )
         llm_kwargs = {"model": gateway.runtime_model(), "stream": True}
+        if gateway.provider == "opencode_zen":
+            # OpenCode Go returns a LiteLLM prompt-token wrapper without the
+            # Anthropic cache fields expected by OpenHands' cache accounting.
+            # Disable prompt-cache accounting for this OpenAI-compatible route.
+            llm_kwargs["caching_prompt"] = False
+            # DeepSeek V4.1 Flash on Go rejects a follow-up message that
+            # enters thinking mode without the provider's reasoning_content.
+            # OpenHands' default reasoning_effort=high triggers that path;
+            # keep this route in ordinary tool-calling mode.
+            llm_kwargs["reasoning_effort"] = "none"
+            # Keep the OpenAI-compatible routing name for LiteLLM, but use the
+            # canonical DeepSeek name for OpenHands capability detection so
+            # assistant reasoning_content is replayed on tool follow-ups.
+            llm_kwargs["model_canonical_name"] = "deepseek/deepseek-v4.1-flash"
+            llm_kwargs["capability_overrides"] = {
+                "thinking_mode": "none",
+                "supports_reasoning_effort": False,
+            }
         if gateway.base_url:
             llm_kwargs["base_url"] = gateway.base_url
         if gateway.api_mode:
@@ -223,9 +252,10 @@ class OpenHandsGateway:
         policy_path = policy_root / f"{execution_id}.json"
         with execution.factory() as session:
             task = session.scalar(select(OnboardingTask).where(OnboardingTask.task_id == task_id))
-            policy["browser_group"] = hashlib.sha256(f"batch:{task.batch_id}".encode()).hexdigest()[
-                :32
-            ]
+            policy["browser_group"] = hashlib.sha256(
+                f"batch:{task.batch_id}:lane:{task.browser_lane}".encode()
+            ).hexdigest()[:32]
+            policy["wait_for_owner"] = settings.browser_lane_count > 1
         policy_path.write_text(json.dumps(policy, ensure_ascii=False), encoding="utf-8")
         tool_names = ["CollectorReadTool"] + ([] if review_only else ["CollectorWriteTool"])
         use_browser = settings.agent_browser_enabled and browser_enabled is not False
@@ -254,7 +284,10 @@ class OpenHandsGateway:
             conversation_id,
             agent,
             settings.agent_max_iterations,
-            allow_create=previous_status == "CREATED",
+            # A disconnected client may have lost the remote conversation
+            # while the durable execution row is still recoverable.  Recreate
+            # the same conversation id when the server no longer has it.
+            allow_create=previous_status in {"CREATED", "DISCONNECTED"},
         )
         conversation = Conversation(
             agent=agent,

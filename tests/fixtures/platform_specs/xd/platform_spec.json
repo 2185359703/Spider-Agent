@@ -1,0 +1,351 @@
+{
+  "schema_name": "platform_spec",
+  "schema_version": "1.0",
+  "spec_id": "spec-fixture-xd",
+  "spec_revision": 1,
+  "spec_hash": "b9118efdc0683766b432bc90b54f581f97aeed97ea9482e3674b60e14684f120",
+  "task_id": "fixture-xd",
+  "platform_key": "xd",
+  "source_name": "心动公司",
+  "crawl_version": "v1.0.0",
+  "status": "NEEDS_REVIEW",
+  "identity": {
+    "entry_url": "https://hr.xd.cn/117745/position/list#/",
+    "normalized_url": "https://hr.xd.cn/117745/position/list#/",
+    "platform_id": null,
+    "entity_id": null
+  },
+  "adapter": {
+    "family": "feishu",
+    "runtime_mode": "http",
+    "browser_required_for_discovery": true,
+    "browser_required_for_runtime": false,
+    "collector_template": "feishu",
+    "version": "1.0"
+  },
+  "request_profile": {
+    "timeout_seconds": 30,
+    "max_retries": 3,
+    "backoff_seconds": [
+      1.0,
+      2.0,
+      4.0
+    ],
+    "rate_limit_per_second": 1.0,
+    "allowed_headers": [],
+    "credentials_required": false
+  },
+  "endpoints": {
+    "list": {
+      "method": "POST",
+      "url_template": "https://hr.xd.cn/api/v1/search/job/posts",
+      "query": {},
+      "body": {},
+      "response_format": "json",
+      "items_selector": {
+        "source": "response_body",
+        "kind": "json_path",
+        "expression": "$.data.job_post_list",
+        "multiple": false,
+        "fallbacks": [],
+        "transforms": [],
+        "confidence": "high",
+        "inferred": false,
+        "inference_reason": null,
+        "evidence_refs": [
+          "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+        ]
+      },
+      "decode": null,
+      "evidence_refs": [
+        "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+      ],
+      "confidence": "medium",
+      "inferred": true
+    },
+    "detail": {
+      "method": "GET",
+      "url_template": "https://hr.xd.cn/api/v1/job/posts/{id}",
+      "query": {},
+      "body": {},
+      "response_format": "json",
+      "items_selector": {
+        "source": "response_body",
+        "kind": "json_path",
+        "expression": "$.data.detail",
+        "multiple": false,
+        "fallbacks": [],
+        "transforms": [],
+        "confidence": "low",
+        "inferred": true,
+        "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+        "evidence_refs": [
+          "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+        ]
+      },
+      "decode": null,
+      "evidence_refs": [
+        "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+      ],
+      "confidence": "medium",
+      "inferred": true
+    },
+    "related": []
+  },
+  "pagination": {
+    "mode": "offset",
+    "page_param": "offset",
+    "size_param": "limit",
+    "cursor_param": null,
+    "next_url_selector": null,
+    "page_start": 0,
+    "page_size": 20,
+    "max_pages": 50,
+    "termination": [
+      "empty_page",
+      "repeated_page_fingerprint",
+      "max_pages"
+    ],
+    "total_count_selector": null,
+    "evidence_refs": [
+      "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+    ],
+    "confidence": "medium",
+    "inferred": true
+  },
+  "fields": {
+    "source_id": {
+      "required": true,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.id",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "title": {
+      "required": true,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.title",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "source_url": {
+      "required": true,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "template",
+          "expression": "https://hr.xd.cn/117745/position/{id}/detail",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "location": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    },
+    "description": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.description",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "requirements": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.requirement",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "publish_time": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    },
+    "department": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    },
+    "employment_type": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    },
+    "job_type": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    }
+  },
+  "filters": {
+    "internship": {
+      "match_scope": [
+        "title",
+        "employment_type",
+        "description",
+        "requirements"
+      ],
+      "include_keywords": [
+        "实习",
+        "实习生",
+        "intern",
+        "internship"
+      ],
+      "exclude_keywords": [
+        "正式",
+        "全职",
+        "社招"
+      ],
+      "match_mode": "any",
+      "must_match": true,
+      "evidence_refs": [
+        "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+      ],
+      "confidence": "medium",
+      "inferred": true,
+      "inference_reason": "来自真实分析证据，待回放确认"
+    },
+    "location": {
+      "include": [],
+      "exclude": []
+    }
+  },
+  "normalization": {
+    "text": [
+      "decode_html_entities",
+      "strip_html",
+      "replace_nbsp",
+      "collapse_whitespace",
+      "drop_empty_lines"
+    ],
+    "lists": {
+      "deduplicate": true,
+      "preserve_order": true
+    },
+    "time": {
+      "accepted_formats": [
+        "unix_seconds",
+        "unix_milliseconds",
+        "iso8601",
+        "yyyy-mm-dd"
+      ],
+      "default_timezone": "Asia/Shanghai",
+      "infer_missing_publish_time": false
+    },
+    "url": {
+      "resolve_relative": true,
+      "remove_tracking_params": true
+    }
+  },
+  "validation": {
+    "required_fields": [
+      "source_id",
+      "title",
+      "source_url"
+    ],
+    "body_required_any_of": [
+      "description",
+      "requirements"
+    ],
+    "list_required": true,
+    "detail_required": true,
+    "pagination_required": true,
+    "min_sample_count": 1,
+    "live_sample_count": 3,
+    "expected_http_statuses": [
+      200
+    ],
+    "low_confidence_fields": [],
+    "blocking_errors": [
+      "missing_source_id",
+      "missing_title",
+      "missing_source_url",
+      "unbounded_pagination",
+      "unsanitized_sensitive_data"
+    ]
+  },
+  "evidence": {
+    "required_refs": [
+      "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json"
+    ],
+    "manifest_ref": "37a992ec269e4ad8b7b3914308177a70/df687149ab4940f0aa949a4b7819a75e/analysis.json",
+    "redaction_status": "pending"
+  },
+  "generation": {
+    "target_repository": "aicoding-auto_spider",
+    "baseline_ref": "c932dbac4bb75df04008c85d3560c1b7a28ec211",
+    "allowed_files": [
+      "collectors/xd.py",
+      "config/platforms/xd.toml",
+      "tests/test_xd.py",
+      "tests/fixtures/xd/*"
+    ],
+    "test_commands": [],
+    "commit_type": "feat",
+    "simulated": false
+  },
+  "confidence_summary": {}
+}

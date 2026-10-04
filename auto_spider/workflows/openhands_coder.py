@@ -99,6 +99,8 @@ class OpenHandsCodingGateway:
             "写入工具会即时校验补丁，失败时文件不会保存。根据返回的字段错误修正，"
             "直到成功写入才结束。不要自造枚举；加密 JSON 的 response_format 仍为 json，"
             "decode 是对象；解码后的 JSON 选择器 source 仍为 response_body。"
+            "为控制批量接入耗时，不要扫描整个仓库或无关测试；只读取一个最相近的协议适配器、"
+            "公共接口定义和 generation.allowed_files 中的文件，写完允许文件后运行限定测试并结束。"
         )
 
     @staticmethod

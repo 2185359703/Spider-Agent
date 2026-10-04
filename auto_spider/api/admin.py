@@ -8,6 +8,7 @@ import re
 import subprocess
 import zipfile
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
@@ -30,6 +31,7 @@ from auto_spider.db.models import (
     WorkflowEvent,
     WorkflowRun,
 )
+from auto_spider.git.target import CollectorRepository
 from auto_spider.schemas import ManualReviewRequest
 from auto_spider.services.evidence import sanitize
 from auto_spider.services.tasks import create_review
@@ -99,9 +101,13 @@ def task_or_404(session, task_id):
     return task
 
 
-def git(*args: str) -> bytes:
+def repository_for_task(task: OnboardingTask) -> Path:
+    return CollectorRepository.for_repository_key(task.repository_key).path
+
+
+def git(repository: Path, *args: str) -> bytes:
     result = subprocess.run(
-        ["git", "-C", str(get_settings().aicoding_repo_path), *args],
+        ["git", "-C", str(repository), *args],
         capture_output=True,
         timeout=30,
         check=False,
@@ -113,6 +119,7 @@ def git(*args: str) -> bytes:
 
 def source_context(session, task_id: str, submission_id: str):
     task = task_or_404(session, task_id)
+    repository = repository_for_task(task)
     row = session.scalar(
         select(CodeSubmission).where(
             CodeSubmission.task_id == task_id,
@@ -125,7 +132,7 @@ def source_context(session, task_id: str, submission_id: str):
         raise HTTPException(409, "提交号无效")
     if not re.fullmatch(r"[a-zA-Z0-9_]+", task.platform_key):
         raise HTTPException(409, "平台键无效")
-    names = git("ls-tree", "-r", "--name-only", row.commit_sha).decode().splitlines()
+    names = git(repository, "ls-tree", "-r", "--name-only", row.commit_sha).decode().splitlines()
     key = task.platform_key
     files = [
         name
@@ -141,13 +148,13 @@ def source_context(session, task_id: str, submission_id: str):
     return task, row, files
 
 
-def blob(commit: str, name: str) -> str:
-    if git("cat-file", "-t", f"{commit}:{name}").strip() != b"blob":
+def blob(repository: Path, commit: str, name: str) -> str:
+    if git(repository, "cat-file", "-t", f"{commit}:{name}").strip() != b"blob":
         raise HTTPException(409, "文件类型不可读取")
-    size = int(git("cat-file", "-s", f"{commit}:{name}"))
+    size = int(git(repository, "cat-file", "-s", f"{commit}:{name}"))
     if size > 2_000_000:
         raise HTTPException(413, "文件过大，请下载代码包查看")
-    return git("show", f"{commit}:{name}").decode("utf-8", errors="replace")
+    return git(repository, "show", f"{commit}:{name}").decode("utf-8", errors="replace")
 
 
 @router.get("/tasks/{task_id}/code/{submission_id}")
@@ -158,7 +165,8 @@ def code_view(
     actor: CurrentActor,
     path: str | None = None,
 ):
-    _, row, files = source_context(session, task_id, submission_id)
+    task, row, files = source_context(session, task_id, submission_id)
+    repository = repository_for_task(task)
     selected = path or next((f for f in files if f.endswith(".py")), None)
     if selected and selected not in files:
         raise HTTPException(403, "文件不在当前入口允许范围内")
@@ -194,7 +202,7 @@ def code_view(
         "commit_sha": row.commit_sha,
         "files": files,
         "path": selected,
-        "content": blob(row.commit_sha, selected) if selected else "",
+        "content": blob(repository, row.commit_sha, selected) if selected else "",
         "validation_status": validation.result_json.get("technical_status", "PARTIAL")
         if validation
         else report.technical_status
@@ -222,13 +230,13 @@ def edit_code(
     from auto_spider.services.code_edit import save_code_edit
 
     task, source, files = source_context(session, task_id, submission_id)
+    repository = repository_for_task(task)
     if request.path not in files:
         raise HTTPException(403, "文件不在当前入口允许范围内")
     if request.base_commit != source.commit_sha:
         raise HTTPException(409, "代码版本已变化，请刷新")
-    if request.content.replace("\r\n", "\n") == blob(source.commit_sha, request.path).replace(
-        "\r\n", "\n"
-    ):
+    current_content = blob(repository, source.commit_sha, request.path)
+    if request.content.replace("\r\n", "\n") == current_content.replace("\r\n", "\n"):
         return {
             "submission_id": source.submission_id,
             "commit_sha": source.commit_sha,
@@ -256,9 +264,19 @@ def code_diff(
     actor: CurrentActor,
     against: str | None = None,
 ):
-    _, row, files = source_context(session, task_id, submission_id)
+    task, row, files = source_context(session, task_id, submission_id)
+    repository = repository_for_task(task)
     base = source_context(session, task_id, against)[1].commit_sha if against else row.baseline_ref
-    diff = git("diff", "--no-ext-diff", "--no-textconv", base, row.commit_sha, "--", *files)
+    diff = git(
+        repository,
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        base,
+        row.commit_sha,
+        "--",
+        *files,
+    )
     return {
         "base": base,
         "head": row.commit_sha,
@@ -270,10 +288,11 @@ def code_diff(
 @router.get("/tasks/{task_id}/code/{submission_id}/download")
 def code_archive(task_id: str, submission_id: str, session: DbSession, actor: CurrentActor):
     task, row, files = source_context(session, task_id, submission_id)
+    repository = repository_for_task(task)
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for name in files:
-            archive.writestr(name, blob(row.commit_sha, name))
+            archive.writestr(name, blob(repository, row.commit_sha, name))
     filename = f"{task.platform_key}-{row.commit_sha[:8]}.zip"
     return Response(
         buffer.getvalue(),

@@ -175,6 +175,16 @@ class EndpointSpec(PlatformSpecModel):
     confidence: Confidence = Confidence.LOW
     inferred: bool = False
 
+    @model_validator(mode="after")
+    def check_evidence_and_template(self) -> EndpointSpec:
+        if self.url_template.endswith(("#list", "#detail")):
+            raise ValueError("EndpointSpec 不允许使用 #list/#detail 占位地址")
+        if self.confidence == Confidence.HIGH and not self.evidence_refs:
+            raise ValueError("high confidence endpoint 必须关联 evidence_refs")
+        if self.inferred and self.confidence == Confidence.HIGH:
+            raise ValueError("inferred endpoint 不能标记为 high confidence")
+        return self
+
 
 class DecodeSpec(PlatformSpecModel):
     mode: DecodeMode = DecodeMode.NONE
@@ -273,6 +283,10 @@ class PaginationSpec(PlatformSpecModel):
             raise ValueError("cursor 模式必须提供 cursor_param")
         if self.mode == PaginationMode.NEXT_URL and not self.next_url_selector:
             raise ValueError("next_url 模式必须提供 next_url_selector")
+        if self.confidence == Confidence.HIGH and not self.evidence_refs:
+            raise ValueError("high confidence pagination 必须关联 evidence_refs")
+        if self.inferred and not self.evidence_refs:
+            raise ValueError("inferred pagination 必须关联 evidence_refs")
         return self
 
 
@@ -316,6 +330,14 @@ class InternshipFilterSpec(PlatformSpecModel):
     confidence: Confidence = Confidence.LOW
     inferred: bool = False
     inference_reason: str | None = None
+
+    @model_validator(mode="after")
+    def check_filter_evidence(self) -> InternshipFilterSpec:
+        if self.inferred and not self.inference_reason:
+            raise ValueError("inferred=true 时必须提供 inference_reason")
+        if self.confidence == Confidence.HIGH and not self.evidence_refs:
+            raise ValueError("high confidence internship filter 必须关联 evidence_refs")
+        return self
 
 
 class LocationFilterSpec(PlatformSpecModel):
@@ -495,6 +517,11 @@ class PlatformSpec(PlatformSpecModel):
             if endpoint is not None and endpoint.decode is not None:
                 if endpoint.decode.helper_required and not endpoint.decode.helper_entrypoint:
                     errors.append(f"missing_{endpoint_name}_response_decoder")
+            if endpoint is not None and not endpoint.evidence_refs:
+                errors.append(f"missing_{endpoint_name}_endpoint_evidence")
+            if endpoint is not None and endpoint.items_selector is not None:
+                if not endpoint.items_selector.evidence_refs:
+                    errors.append(f"missing_{endpoint_name}_selector_evidence")
         if self.validation.detail_required and self.endpoints.detail is None:
             errors.append("missing_detail_endpoint")
         if self.validation.pagination_required and self.pagination.mode != PaginationMode.NONE:
@@ -502,6 +529,8 @@ class PlatformSpec(PlatformSpecModel):
                 errors.append("unbounded_pagination")
         if self.validation.pagination_required and self.pagination.mode == PaginationMode.NONE:
             errors.append("pagination_not_verified")
+        if self.pagination.mode != PaginationMode.NONE and not self.pagination.evidence_refs:
+            errors.append("missing_pagination_evidence")
         for field_name in self.fields.hard_field_names():
             field = getattr(self.fields, field_name)
             if not field.selectors:

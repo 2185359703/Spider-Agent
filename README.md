@@ -133,3 +133,7 @@ OpenCode Zen/Go 使用 OpenAI 兼容的 `/v1/chat/completions` 接口。Go 地�
 `x-opencode-session`；普通 Zen 地址可使用 `https://opencode.ai/zen/v1`。切换前必须在 `.env` 配置凭证，
 然后执行 `docker compose up -d --build api worker scheduler`。系统设置页不会显示 API key；
 数据库只保存当前 profile 名称，AgentExecution 保存模型、地址和 API 模式快照。
+
+批量接入默认使用 2 路并行。`WORKER_CONCURRENCY=2` 控制 Agent Worker 并发，
+`BROWSER_LANE_COUNT=2` 为批次分配两个可复用的浏览器槽位；同一槽位内会等待前一个公司释放页面，
+不同槽位可以同时分析。提高并发时应同步增加浏览器内存预算。

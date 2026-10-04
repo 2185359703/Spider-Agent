@@ -184,6 +184,7 @@ class BrowserCLI:
             raise ValueError("BROWSER_REQUEST_INDEX_REQUIRED")
         if value and (len(value) > 2000 or value.startswith("--") or "\x00" in value):
             raise ValueError("BROWSER_VALUE_DENIED")
+        self.wait_for_owner()
         with self.lock():
             self.folder.mkdir(parents=True, exist_ok=True)
             for name in ("home", "cache", "tmp"):
@@ -256,6 +257,7 @@ class BrowserCLI:
                 owner=self.execution_id,
             )
             self.save(receipt)
+
             try:
                 if action == "open" and not receipt.get("opened"):
                     self._run(["open", "about:blank", f"--config={config}", "--idle-timeout=0"])
@@ -348,6 +350,21 @@ class BrowserCLI:
                 receipt.update(busy=False, touched=time.time(), closed=action == "close")
                 self.save(receipt)
 
+    def wait_for_owner(self, timeout_seconds: int = 900):
+        """Wait for another company on this browser lane to release its page."""
+        if not self.policy.get("wait_for_owner") or self.policy.get("browser_group") is None:
+            return
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            with self.lock():
+                receipt = self.receipt()
+                owner = receipt.get("owner")
+                if owner in (None, self.execution_id):
+                    return
+            if time.monotonic() >= deadline:
+                raise ValueError("BROWSER_BATCH_BUSY: 浏览器槽位等待超时")
+            time.sleep(0.5)
+
     def capture(self, sequence, action, output):
         if not self.policy.get("browser_evidence"):
             return None
@@ -437,7 +454,17 @@ class BrowserCLI:
             if receipt.get("owner") not in (None, self.execution_id):
                 return {"released": False, "reason": "other_company_active"}
             if receipt.get("owner") and receipt.get("page_open"):
-                self._run(["tab-close"])
+                try:
+                    self._run(["tab-close"])
+                except RuntimeError as exc:
+                    # A worker/Agent Server restart can remove the Playwright
+                    # session while leaving the durable receipt behind. The
+                    # browser is already gone, so clearing ownership is safe.
+                    if not any(
+                        term in str(exc).lower()
+                        for term in ("not open", "not found", "no browser", "not running")
+                    ):
+                        raise
             receipt.update(owner=None, busy=False, page_open=False, touched=time.time())
             self.save(receipt)
             return {"released": True, "browser_reused": True, "session": self.session}

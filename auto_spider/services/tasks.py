@@ -8,6 +8,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from auto_spider.config import get_settings
 from auto_spider.db.models import (
     CodeSubmission,
     FailureBundle,
@@ -64,7 +65,8 @@ def create_batch(
     session.add(batch)
     session.flush()
     tasks: list[OnboardingTask] = []
-    for item in request.items:
+    lane_count = get_settings().browser_lane_count
+    for item_index, item in enumerate(request.items):
         url = str(item.entry_url)
         task = OnboardingTask(
             task_id=new_id(),
@@ -73,6 +75,7 @@ def create_batch(
             normalized_url=url,
             platform_name=item.platform_name,
             platform_key=item.platform_key or platform_key_from_url(url),
+            browser_lane=item_index % lane_count,
             repository_key=item.repository_key,
             policy_version=item.policy_version,
             platform_id=None,

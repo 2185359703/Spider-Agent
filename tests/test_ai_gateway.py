@@ -37,8 +37,20 @@ def test_opencode_go_uses_stable_session_header(monkeypatch):
     monkeypatch.setattr(settings, "opencode_base_url", "https://opencode.ai/zen/go/v1")
     config = resolve_gateway_config(settings, profile_override="opencode_zen")
     assert config.extra_headers("conversation-123") == {
-        "x-opencode-session": "conversation-123"
+        "x-opencode-session": "conversation-123",
+        "User-Agent": "auto-spider-agent/1.0",
     }
+
+
+def test_deepseek_capability_profile_replays_reasoning_content():
+    from openhands.sdk.llm.utils.model_features import get_features
+
+    features = get_features(
+        "deepseek/deepseek-v4.1-flash",
+        overrides={"thinking_mode": "none", "supports_reasoning_effort": False},
+    )
+    assert features.thinking_mode == "none"
+    assert features.send_reasoning_content is True
 
 
 def test_admin_can_switch_gateway_when_idle(db_session, monkeypatch):

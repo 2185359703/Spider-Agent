@@ -8,7 +8,10 @@ from openhands.agent_server.api import api
 from openhands.agent_server.dependencies import check_session_api_key
 
 from auto_spider.ai.browser_cli import BrowserCLI, runtime_root, validate_id
+from auto_spider.ai.openhands_compat import install_provider_compat
 from auto_spider.ai.workspace_access import load_policy
+
+install_provider_compat()
 
 router = APIRouter(prefix="/api/collector-browser", dependencies=[Depends(check_session_api_key)])
 

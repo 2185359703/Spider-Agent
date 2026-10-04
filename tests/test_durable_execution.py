@@ -1,4 +1,3 @@
-from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -74,7 +73,7 @@ def test_new_worker_recovers_checkpoint_without_repeating_generation(db_session,
     assert db_session.query(OnboardingReport).count() == 1
 
 
-def test_validation_failure_repairs_and_revises_spec_before_publishing(db_session, tmp_path):
+def test_validation_failure_publishes_candidate_for_manual_review(db_session, tmp_path):
     task = make_task(db_session)
     order = []
 
@@ -85,34 +84,20 @@ def test_validation_failure_repairs_and_revises_spec_before_publishing(db_sessio
             "pytest_status": "FAIL" if state["attempt"] == 0 else "PASS",
         }
 
-    class Repair(FakeRepairGateway):
-        def repair(self, *args, **kwargs):
-            result = super().repair(*args, **kwargs)
-            fields = deepcopy(kwargs["spec"]["fields"])
-            fields["title"]["selectors"][0]["expression"] = "$.job_name"
-            result["spec_patch"] = {
-                "reason": "真实响应标题字段 job_name",
-                "evidence_refs": kwargs["spec"]["fields"]["title"]["selectors"][0]["evidence_refs"],
-                "patch": {"fields": fields},
-            }
-            return result
-
     def publish(*args, **kwargs):
         order.append("commit")
         return fake_publication(*args, **kwargs)
 
-    result = runner(
-        tmp_path, validator=validate, repairer=Repair(), publisher=publish
-    ).run_onboarding(db_session, task.task_id)
-    assert order == ["validate:0", "validate:1", "commit"]
+    result = runner(tmp_path, validator=validate, publisher=publish).run_onboarding(
+        db_session, task.task_id
+    )
+    assert order == ["validate:0", "commit"]
     assert result["status"] == "WAITING_MANUAL_RUN"
     specs = db_session.query(PlatformSpec).order_by(PlatformSpec.spec_version).all()
-    assert [s.spec_json["spec_revision"] for s in specs] == [1, 2]
-    assert specs[0].spec_hash != specs[1].spec_hash
-    assert specs[0].spec_json["fields"]["title"] != specs[1].spec_json["fields"]["title"]
-    assert db_session.query(OnboardingReport).count() == 2
+    assert [s.spec_json["spec_revision"] for s in specs] == [1]
+    assert db_session.query(OnboardingReport).count() == 1
     assert db_session.query(CodeSubmission).count() == 1
-    assert db_session.query(FailureBundle).one().status == "REPAIRED"
+    assert db_session.query(FailureBundle).count() == 0
 
 
 def test_repair_budget_survives_redelivery(db_session, tmp_path, monkeypatch):
@@ -125,11 +110,11 @@ def test_repair_budget_survives_redelivery(db_session, tmp_path, monkeypatch):
 
     runtime = runner(tmp_path, validator=fail)
     result = runtime.run_onboarding(db_session, task.task_id)
-    assert result["stop_reason"] == "REPAIR_BUDGET_EXCEEDED"
-    assert db_session.query(RepairRun).count() == 2
-    assert db_session.query(CodeSubmission).count() == 0
+    assert result["status"] == "WAITING_MANUAL_RUN"
+    assert db_session.query(RepairRun).count() == 0
+    assert db_session.query(CodeSubmission).count() == 1
     runtime.run_onboarding(db_session, task.task_id)
-    assert db_session.query(RepairRun).count() == 2
+    assert db_session.query(RepairRun).count() == 0
 
 
 @pytest.mark.parametrize("action,expected", [("PAUSE", "PAUSED"), ("CANCEL", "CANCELLED")])

@@ -16,6 +16,7 @@ from auto_spider.schemas import (
 )
 from auto_spider.services.browser_evidence import sanitize_text
 from auto_spider.services.discovery_evidence import verify_discovery_draft
+from auto_spider.services.spec_normalizer import normalize_spec_draft
 
 
 class DiscoverySpecInvalid(ValueError):
@@ -100,6 +101,13 @@ def apply_correction(analysis, response):
         return value
 
     proposal.spec_draft = normalize_aliases(proposal.spec_draft)
+    # Handle evidence-backed pagination aliases locally before validating the
+    # nested models.  A correction agent should not be spent on
+    # ``cursor_param=offset`` when the captured request already proves the
+    # canonical ``page_param=offset`` value.
+    proposal.spec_draft, _ = normalize_spec_draft(
+        proposal.spec_draft, observation=analysis
+    )
     for name, value in proposal.spec_draft.items():
         proposal.spec_draft[name] = sections[name].model_validate(value).model_dump(mode="json")
     # Observation, input URLs and permission envelope cannot be rewritten by this phase.

@@ -39,7 +39,7 @@ RUN pip install --upgrade pip \
 
 COPY auto_spider/__init__.py /opt/auto-spider/auto_spider/__init__.py
 COPY auto_spider/schemas.py /opt/auto-spider/auto_spider/schemas.py
-COPY auto_spider/ai/__init__.py auto_spider/ai/collector_tools.py auto_spider/ai/workspace_access.py auto_spider/ai/browser_cli.py auto_spider/ai/browser_server_routes.py /opt/auto-spider/auto_spider/ai/
+COPY auto_spider/ai/__init__.py auto_spider/ai/collector_tools.py auto_spider/ai/workspace_access.py auto_spider/ai/browser_cli.py auto_spider/ai/browser_server_routes.py auto_spider/ai/openhands_compat.py /opt/auto-spider/auto_spider/ai/
 COPY auto_spider/services/__init__.py auto_spider/services/browser_evidence.py auto_spider/services/validation_activity.py /opt/auto-spider/auto_spider/services/
 COPY auto_spider/services/spec_patch.py /opt/auto-spider/auto_spider/services/
 COPY auto_spider/services/analysis_submission.py /opt/auto-spider/auto_spider/services/

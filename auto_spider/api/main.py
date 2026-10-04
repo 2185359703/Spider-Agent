@@ -990,7 +990,7 @@ def submission_diff(
     session: DbSession,
     actor: CurrentActor,
 ) -> dict:
-    _require_task(session, task_id)
+    task = _require_task(session, task_id)
     submission = session.scalar(
         select(CodeSubmission).where(
             CodeSubmission.task_id == task_id,
@@ -1007,7 +1007,7 @@ def submission_diff(
             "diff": "",
         }
 
-    repository = get_settings().aicoding_repo_path
+    repository = CollectorRepository.for_repository_key(task.repository_key).path
     if not (repository / ".git").exists():
         return {
             "submission_id": submission_id,

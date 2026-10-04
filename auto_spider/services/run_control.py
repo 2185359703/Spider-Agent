@@ -39,6 +39,17 @@ def control_run(session, task_id, action, request_id):
                 }
             enqueue = True  # Leases arbitrate stale vs actually-running requests.
         elif run.status in {"PAUSED", "FAILED", "INTERRUPTED", "TIMED_OUT"}:
+            # A worker/Agent Server restart can leave the last execution row
+            # as RUNNING even though this workflow is terminal.  Fence that
+            # stale row before retry so the gateway may rotate its prompt hash
+            # and remote conversation id.
+            for execution in session.scalars(
+                select(AgentExecution).where(
+                    AgentExecution.run_id == run.run_id,
+                    AgentExecution.status.in_(["CREATED", "RUNNING"]),
+                )
+            ):
+                execution.status = "DISCONNECTED"
             run.control, run.status = None, "QUEUED"
             task.status, task.next_action = "SUBMITTED", "RESUME_WORKFLOW"
             enqueue = True

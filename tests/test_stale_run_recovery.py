@@ -63,3 +63,34 @@ def test_live_agent_is_not_reclaimed(db_session):
     assert reconcile_stale_runs(factory_for(db_session)) == []
     db_session.refresh(run)
     assert run.status == "RUNNING"
+
+
+def test_disconnected_agent_is_reclaimed_for_checkpoint_resume(db_session):
+    task = make_task(db_session)
+    run = WorkflowRun(
+        run_id="disconnected-run",
+        task_id=task.task_id,
+        run_type="onboarding",
+        status="RUNNING",
+        started_at=datetime.now(UTC) - timedelta(hours=2),
+    )
+    db_session.add(run)
+    db_session.flush()
+    db_session.add(
+        AgentExecution(
+            execution_id="d" * 32,
+            task_id=task.task_id,
+            run_id=run.run_id,
+            step_key="patch_code:1",
+            conversation_id="00000000-0000-4000-8000-000000000002",
+            workspace_path="/tmp/workspace",
+            server_url="http://agent",
+            prompt_hash="e" * 64,
+            status="DISCONNECTED",
+        )
+    )
+    db_session.commit()
+
+    assert reconcile_stale_runs(factory_for(db_session)) == ["disconnected-run"]
+    db_session.refresh(run)
+    assert run.status == "INTERRUPTED"

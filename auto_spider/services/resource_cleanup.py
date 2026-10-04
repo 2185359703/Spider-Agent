@@ -152,11 +152,27 @@ def cleanup_resources(factory, client=None):
                         (row.result_json or {}).get("batch_browser_released_at")
                         for row in executions
                     ):
-                        group = hashlib.sha256(f"batch:{bid}".encode()).hexdigest()[:32]
-                        response = client.post(f"/api/collector-browser/batches/{group}/close")
-                        if response.is_success and response.json().get("released"):
-                            result["batches_released"] += 1
-                            result["cache_bytes_released"] += response.json().get("bytes", 0)
+                        lanes = sorted(
+                            {
+                                task.browser_lane
+                                for task in session.scalars(
+                                    select(OnboardingTask).where(OnboardingTask.batch_id == bid)
+                                )
+                            }
+                        ) or [0]
+                        released_lanes = False
+                        for lane in lanes:
+                            group = hashlib.sha256(
+                                f"batch:{bid}:lane:{lane}".encode()
+                            ).hexdigest()[:32]
+                            response = client.post(
+                                f"/api/collector-browser/batches/{group}/close"
+                            )
+                            if response.is_success and response.json().get("released"):
+                                result["batches_released"] += 1
+                                result["cache_bytes_released"] += response.json().get("bytes", 0)
+                                released_lanes = True
+                        if released_lanes:
                             for row in executions:
                                 row.result_json = {
                                     **(row.result_json or {}),

@@ -97,7 +97,11 @@ def save_code_edit(session, task, source, *, path, content, client_request_id, a
                 raise ValueError("任务状态已变化，请刷新后保存")
             task.status, task.current_run_id = "EDITING", run_id
             session.commit()
-            manager = WorktreeManager(CollectorRepository(baseline_ref=source.commit_sha))
+            manager = WorktreeManager(
+                CollectorRepository.for_repository_key(
+                    task.repository_key, baseline_ref=source.commit_sha
+                )
+            )
             context = manager.prepare(task_id, run_id, mutation_enabled=True, ref=source.commit_sha)
             access = WorkspaceAccess(
                 {

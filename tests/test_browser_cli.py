@@ -118,3 +118,17 @@ def test_cli_navigation_error_is_evidence_and_can_be_reclaimed(tmp_path, monkeyp
     assert instance.release()["released"]
     assert instance.close()["released"]
     assert capture.exists()
+
+
+def test_release_clears_receipt_when_browser_was_restarted(tmp_path, monkeypatch):
+    instance, _ = browser(tmp_path, monkeypatch)
+    instance.execute("open", url="https://one.example.com")
+
+    def restarted_runner(command, cwd, env):
+        if command[2] == "tab-close":
+            raise RuntimeError("Browser is not open")
+        return "Real browser output"
+
+    instance.runner = restarted_runner
+    assert instance.release()["released"]
+    assert instance.receipt()["owner"] is None

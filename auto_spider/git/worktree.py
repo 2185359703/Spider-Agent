@@ -53,6 +53,15 @@ class WorktreeManager:
                 mutation_enabled=False,
             )
         path.parent.mkdir(parents=True, exist_ok=True)
+        # Discovery and Spec-repair use sibling directories below the run
+        # directory. If an interrupted run left those directories behind, the
+        # run directory itself is not a Git worktree and must not be treated as
+        # one. Keep the old path for existing valid worktrees, and isolate new
+        # candidate worktrees under a dedicated child directory.
+        if path.exists() and not (path / ".git").exists():
+            path = (path / "candidate").resolve()
+            if path.is_symlink() or (path.exists() and not (path / ".git").exists()):
+                raise RuntimeError(f"WORKTREE_PATH_CONFLICT: {path}")
         if path.exists():
 
             def read_git(*args):

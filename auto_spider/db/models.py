@@ -42,6 +42,7 @@ class OnboardingTask(Base):
     normalized_url: Mapped[str] = mapped_column(String(2048))
     platform_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     platform_key: Mapped[str] = mapped_column(String(128), index=True)
+    browser_lane: Mapped[int] = mapped_column(Integer, default=0, server_default="0", index=True)
     repository_key: Mapped[str] = mapped_column(String(128), default="aicoding-auto_spider")
     policy_version: Mapped[str] = mapped_column(String(64), default="report-v1")
     platform_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

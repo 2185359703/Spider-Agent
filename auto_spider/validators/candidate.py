@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 import os
 import shutil
 import signal
@@ -229,6 +230,7 @@ def validate_candidate(
     *,
     live_url: str | None = None,
     expected_observation: str | None = None,
+    internship_filters: dict[str, Any] | None = None,
     guard=None,
 ) -> CandidateValidation:
     collector_rel = f"collectors/{platform_key}.py"
@@ -333,7 +335,8 @@ def validate_candidate(
             "): sys.exit(22)\n"
             "items = [r.to_dict() if hasattr(r, 'to_dict') else r for r in records]\n"
             "quality = assess_collection_quality(items, "
-            "pagination=getattr(collector, 'collection_diagnostics', {}))\n"
+            "pagination=getattr(collector, 'collection_diagnostics', {}), "
+            f"filters={json.dumps(internship_filters or {}, ensure_ascii=False)!r})\n"
             "summary['quality'] = quality\n"
             "print(json.dumps(summary, ensure_ascii=False))\n"
             "if quality['metrics']['error_count']: sys.exit(24)\n"

@@ -110,7 +110,11 @@ def reconcile_stale_runs(factory):
             active_agent = session.scalar(
                 select(AgentExecution.execution_id).where(
                     AgentExecution.run_id == run.run_id,
-                    AgentExecution.status.in_(["CREATED", "RUNNING", "DISCONNECTED"]),
+                    # DISCONNECTED is recoverable.  Keeping it in the live
+                    # set made a lost Agent Server session pin the workflow in
+                    # RUNNING forever, because no worker could reclaim the
+                    # graph checkpoint and reconnect.
+                    AgentExecution.status.in_(["CREATED", "RUNNING"]),
                 )
             )
             if active_agent:

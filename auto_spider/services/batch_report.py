@@ -43,7 +43,8 @@ def build_batch_report(session, batch_id):
         )
     )
     entries = []
-    for task in tasks:
+
+    def entry_for(task, *, import_status=None, existing_task_id=None):
         report = (
             session.scalar(
                 select(OnboardingReport).where(OnboardingReport.report_id == task.last_report_id)
@@ -60,20 +61,44 @@ def build_batch_report(session, batch_id):
             .order_by(CodeSubmission.id.desc())
             .limit(1)
         )
-        entries.append(
-            {
-                "task_id": task.task_id,
-                "company_name": task.platform_name or task.platform_key,
-                "entry_url": task.entry_url,
-                "status": task.status,
-                "next_action": task.next_action,
-                "observation_code": report.observation_code if report else None,
-                "technical_status": report.technical_status if report else "NOT_RUN",
-                "commit_sha": submission.commit_sha if submission else None,
-                "submission_id": submission.submission_id if submission else None,
-                "reason": _report_reason(report),
-            }
+        value = {
+            "task_id": task.task_id,
+            "company_name": task.platform_name or task.platform_key,
+            "entry_url": task.entry_url,
+            "status": task.status,
+            "next_action": task.next_action,
+            "observation_code": report.observation_code if report else None,
+            "technical_status": report.technical_status if report else "NOT_RUN",
+            "commit_sha": submission.commit_sha if submission else None,
+            "submission_id": submission.submission_id if submission else None,
+            "reason": _report_reason(report),
+        }
+        if import_status:
+            value.update(import_status=import_status, existing_task_id=existing_task_id)
+        return value
+
+    for task in tasks:
+        entries.append(entry_for(task))
+
+    # A duplicate URL is intentionally not copied into the batch as a second
+    # task.  Include its existing task in the report, however, so a nine-line
+    # import still has a nine-company review surface and the operator can see
+    # the latest known result for that company.
+    task_by_id = {task.task_id: task for task in tasks}
+    import_rows = (batch.intake_json or {}).get("result", {}).get("rows", [])
+    for row in import_rows:
+        if row.get("status") != "DUPLICATE":
+            continue
+        existing_id = row.get("existing_task_id")
+        if not existing_id or existing_id in task_by_id:
+            continue
+        existing = session.scalar(
+            select(OnboardingTask).where(OnboardingTask.task_id == existing_id)
         )
+        if existing is not None:
+            entries.append(
+                entry_for(existing, import_status="DUPLICATE", existing_task_id=existing_id)
+            )
     terminal = {
         "WAITING_MANUAL_RUN",
         "WAITING_MANUAL_REVIEW",

@@ -50,6 +50,7 @@ services:
       EVIDENCE_ROOT: /srv/auto_spider/evidence
       WORKTREE_ROOT: /srv/auto_spider/worktrees
       AGENT_POLICY_ROOT: /srv/auto_spider/agent_policies
+      BROWSER_LANE_COUNT: ${BROWSER_LANE_COUNT:-2}
       OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
       OPENHANDS_SESSION_API_KEY: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
       OPENHANDS_LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
@@ -95,6 +96,7 @@ services:
       EVIDENCE_ROOT: /srv/auto_spider/evidence
       WORKTREE_ROOT: /srv/auto_spider/worktrees
       AGENT_POLICY_ROOT: /srv/auto_spider/agent_policies
+      BROWSER_LANE_COUNT: ${BROWSER_LANE_COUNT:-2}
       OPENHANDS_SERVER_URL: http://openhands-agent-server:8000
       OPENHANDS_SESSION_API_KEY: ${OPENHANDS_SESSION_API_KEY:-local-openhands-session-key}
       OPENHANDS_LLM_MODEL: ${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}
@@ -130,6 +132,14 @@ services:
     cpus: 0.25
     command: ["celery", "-A", "auto_spider.workers.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule", "/tmp/auto-spider-beat"]
 
+  # Human-triggered collection must not wait behind long AI coding jobs.
+  collection-worker:
+    extends:
+      service: worker
+    mem_limit: ${COLLECTION_WORKER_MEMORY_LIMIT:-768m}
+    cpus: ${COLLECTION_WORKER_CPU_LIMIT:-1.0}
+    command: ["celery", "-A", "auto_spider.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency", "1", "--prefetch-multiplier", "1", "--max-tasks-per-child", "5", "-Q", "validation"]
+
   openhands-agent-server:
     mem_limit: ${AGENT_MEMORY_LIMIT:-2g}
     cpus: ${AGENT_CPU_LIMIT:-2.0}
@@ -149,6 +159,7 @@ services:
       LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-}
       LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL:-}
       LLM_API_MODE: ${OPENHANDS_LLM_API_MODE:-}
+      LLM_CACHING_PROMPT: "false"
     ports:
       - "18080:8000"
     volumes:
@@ -167,7 +178,7 @@ services:
           "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
         ]
       interval: 5s
-      timeout: 5s
+      timeout: 30s
       retries: 30
     depends_on:
       mysql:

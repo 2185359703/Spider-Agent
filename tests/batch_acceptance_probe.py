@@ -71,6 +71,7 @@ def main():
 
     app.dependency_overrides[get_session] = dependency
     log = (root / "worker.log").open("w", encoding="utf-8")
+    batch_concurrency = max(1, int(os.getenv("BATCH_WORKER_CONCURRENCY", "2")))
     worker = subprocess.Popen(
         [
             sys.executable,
@@ -79,8 +80,8 @@ def main():
             "-A",
             "auto_spider.workers.celery_app:celery_app",
             "worker",
-            "--pool=solo",
-            "--concurrency=1",
+            "--pool=threads",
+            f"--concurrency={batch_concurrency}",
             "--loglevel=WARNING",
             "-Q",
             "analysis,coding,validation,reporting,maintenance",

@@ -63,3 +63,55 @@ def test_millisecond_and_iso_dates_are_valid_and_international_is_not_intern():
         for f in result["findings"]
     )
     assert not any(f["code"] == "INVALID_PUBLISH_TIME" for f in result["findings"])
+
+
+def test_quality_uses_spec_scope_and_rejects_duplicate_urls():
+    first = job("custom-1")
+    first["source_url"] = "https://example.com/jobs/shared"
+    first["raw_content"]["job"].update(
+        title="校园项目",
+        description="暑期 intern 项目",
+        requirements="在校生",
+        employment_type="全职",
+    )
+    second = job("custom-2")
+    second["source_url"] = first["source_url"]
+    second["raw_content"]["job"].update(
+        title="软件开发岗位",
+        description="正式岗位",
+        requirements="熟悉 Python",
+        employment_type="正式",
+    )
+    result = assess_collection_quality(
+        [first, second],
+        filters={
+            "internship": {
+                "match_scope": ["title", "description", "requirements", "employment_type"],
+                "include_keywords": ["intern"],
+                "exclude_keywords": ["正式", "全职"],
+            }
+        },
+        pagination={"termination_verified": True},
+    )
+    codes = {finding["code"] for finding in result["findings"]}
+    assert {"DUPLICATE_SOURCE_URL", "NON_INTERNSHIP_RECORD"} <= codes
+
+
+def test_explicit_internship_title_overrides_contradictory_formal_metadata():
+    record = job("formal-metadata-intern")
+    record["publish_time"] = 1780000000000
+    record["raw_content"]["job"].update(
+        title="机器学习算法实习生",
+        employment_type="正式",
+        recruitment_type="正式",
+        job_type="internship",
+        description="参与机器学习模型开发。",
+        requirements="在校生优先。",
+    )
+    result = assess_collection_quality(
+        [record],
+        pagination={"termination_verified": True},
+    )
+    codes = {finding["code"] for finding in result["findings"]}
+    assert "NON_INTERNSHIP_RECORD" not in codes
+    assert result["status"] == "PASS"

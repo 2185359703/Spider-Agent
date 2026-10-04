@@ -1,0 +1,351 @@
+{
+  "schema_name": "platform_spec",
+  "schema_version": "1.0",
+  "spec_id": "spec-fixture-sanqi",
+  "spec_revision": 1,
+  "spec_hash": "4a3d389a4e3971da53272483bdd27bf736d9ec91d0e77aa98f0e653d550e5a13",
+  "task_id": "fixture-sanqi",
+  "platform_key": "sanqi",
+  "source_name": "三七互娱",
+  "crawl_version": "v1.0.0",
+  "status": "NEEDS_REVIEW",
+  "identity": {
+    "entry_url": "https://app.mokahr.com/campus-recruitment/37/58016?locale=zh-CN#/jobs",
+    "normalized_url": "https://app.mokahr.com/campus-recruitment/37/58016?locale=zh-CN#/jobs",
+    "platform_id": null,
+    "entity_id": null
+  },
+  "adapter": {
+    "family": "mokahr",
+    "runtime_mode": "http",
+    "browser_required_for_discovery": true,
+    "browser_required_for_runtime": false,
+    "collector_template": "mokahr",
+    "version": "1.0"
+  },
+  "request_profile": {
+    "timeout_seconds": 30,
+    "max_retries": 3,
+    "backoff_seconds": [
+      1.0,
+      2.0,
+      4.0
+    ],
+    "rate_limit_per_second": 1.0,
+    "allowed_headers": [],
+    "credentials_required": false
+  },
+  "endpoints": {
+    "list": {
+      "method": "POST",
+      "url_template": "https://app.mokahr.com/api/outer/ats-apply/website/jobs/v2",
+      "query": {},
+      "body": {},
+      "response_format": "json",
+      "items_selector": {
+        "source": "response_body",
+        "kind": "json_path",
+        "expression": "$.data.list",
+        "multiple": false,
+        "fallbacks": [],
+        "transforms": [],
+        "confidence": "high",
+        "inferred": false,
+        "inference_reason": null,
+        "evidence_refs": [
+          "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+        ]
+      },
+      "decode": null,
+      "evidence_refs": [
+        "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+      ],
+      "confidence": "medium",
+      "inferred": true
+    },
+    "detail": {
+      "method": "GET",
+      "url_template": "https://app.mokahr.com/api/outer/ats-apply/website/job",
+      "query": {},
+      "body": {},
+      "response_format": "json",
+      "items_selector": {
+        "source": "response_body",
+        "kind": "json_path",
+        "expression": "$.data.detail",
+        "multiple": false,
+        "fallbacks": [],
+        "transforms": [],
+        "confidence": "low",
+        "inferred": true,
+        "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+        "evidence_refs": [
+          "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+        ]
+      },
+      "decode": null,
+      "evidence_refs": [
+        "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+      ],
+      "confidence": "medium",
+      "inferred": true
+    },
+    "related": []
+  },
+  "pagination": {
+    "mode": "offset",
+    "page_param": "offset",
+    "size_param": "limit",
+    "cursor_param": null,
+    "next_url_selector": null,
+    "page_start": 0,
+    "page_size": 20,
+    "max_pages": 50,
+    "termination": [
+      "empty_page",
+      "repeated_page_fingerprint",
+      "max_pages"
+    ],
+    "total_count_selector": null,
+    "evidence_refs": [
+      "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+    ],
+    "confidence": "medium",
+    "inferred": true
+  },
+  "fields": {
+    "source_id": {
+      "required": true,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.id",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "title": {
+      "required": true,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.title",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "source_url": {
+      "required": true,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "template",
+          "expression": "https://app.mokahr.com/campus-recruitment/37/58016#/job/{id}",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "location": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    },
+    "description": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.description",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "requirements": {
+      "required": false,
+      "selectors": [
+        {
+          "source": "list_item",
+          "kind": "json_path",
+          "expression": "$.requirement",
+          "multiple": false,
+          "fallbacks": [],
+          "transforms": [],
+          "confidence": "low",
+          "inferred": true,
+          "inference_reason": "真实分析证据已保存；待该入口再次回放确认",
+          "evidence_refs": [
+            "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+          ]
+        }
+      ],
+      "transforms": []
+    },
+    "publish_time": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    },
+    "department": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    },
+    "employment_type": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    },
+    "job_type": {
+      "required": false,
+      "selectors": [],
+      "transforms": []
+    }
+  },
+  "filters": {
+    "internship": {
+      "match_scope": [
+        "title",
+        "employment_type",
+        "description",
+        "requirements"
+      ],
+      "include_keywords": [
+        "实习",
+        "实习生",
+        "intern",
+        "internship"
+      ],
+      "exclude_keywords": [
+        "正式",
+        "全职",
+        "社招"
+      ],
+      "match_mode": "any",
+      "must_match": true,
+      "evidence_refs": [
+        "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+      ],
+      "confidence": "medium",
+      "inferred": true,
+      "inference_reason": "来自真实分析证据，待回放确认"
+    },
+    "location": {
+      "include": [],
+      "exclude": []
+    }
+  },
+  "normalization": {
+    "text": [
+      "decode_html_entities",
+      "strip_html",
+      "replace_nbsp",
+      "collapse_whitespace",
+      "drop_empty_lines"
+    ],
+    "lists": {
+      "deduplicate": true,
+      "preserve_order": true
+    },
+    "time": {
+      "accepted_formats": [
+        "unix_seconds",
+        "unix_milliseconds",
+        "iso8601",
+        "yyyy-mm-dd"
+      ],
+      "default_timezone": "Asia/Shanghai",
+      "infer_missing_publish_time": false
+    },
+    "url": {
+      "resolve_relative": true,
+      "remove_tracking_params": true
+    }
+  },
+  "validation": {
+    "required_fields": [
+      "source_id",
+      "title",
+      "source_url"
+    ],
+    "body_required_any_of": [
+      "description",
+      "requirements"
+    ],
+    "list_required": true,
+    "detail_required": true,
+    "pagination_required": true,
+    "min_sample_count": 1,
+    "live_sample_count": 3,
+    "expected_http_statuses": [
+      200
+    ],
+    "low_confidence_fields": [],
+    "blocking_errors": [
+      "missing_source_id",
+      "missing_title",
+      "missing_source_url",
+      "unbounded_pagination",
+      "unsanitized_sensitive_data"
+    ]
+  },
+  "evidence": {
+    "required_refs": [
+      "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json"
+    ],
+    "manifest_ref": "72fb20b2aa3643d2be002b934fa8a80f/48786f0bd13c400e9b8a7911e59037bc/analysis.json",
+    "redaction_status": "pending"
+  },
+  "generation": {
+    "target_repository": "aicoding-auto_spider",
+    "baseline_ref": "c932dbac4bb75df04008c85d3560c1b7a28ec211",
+    "allowed_files": [
+      "collectors/sanqi.py",
+      "config/platforms/sanqi.toml",
+      "tests/test_sanqi.py",
+      "tests/fixtures/sanqi/*"
+    ],
+    "test_commands": [],
+    "commit_type": "feat",
+    "simulated": false
+  },
+  "confidence_summary": {}
+}

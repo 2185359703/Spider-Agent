@@ -28,6 +28,7 @@ def test_large_import_is_one_batch_idempotent_and_keeps_ids_null(db_session):
     assert all(t.platform_id is None and t.entity_id is None for t in tasks)
     assert len({t.platform_key for t in tasks}) == 150
     assert len({t.batch_id for t in tasks}) == 1
+    assert [t.browser_lane for t in tasks[:4]] == [0, 1, 0, 1]
     assert preview_company_import(db_session, text)["duplicates"] == 150
     with pytest.raises(ValueError, match="不一致"):
         submit_company_import(

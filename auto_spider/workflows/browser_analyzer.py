@@ -118,8 +118,14 @@ class BrowserAnalyzer:
                     else:
                         response_shape = "object"
             break
-        pagination_mode = "offset" if request_body and "offset" in request_body else "page"
-        pagination_param = "offset" if pagination_mode == "offset" else "page"
+        # A single capture cannot prove a page-based protocol.  Do not invent
+        # ``page=1`` (or a detail URL) when the browser did not expose it.
+        if request_body and "offset" in request_body:
+            pagination_mode, pagination_param = "offset", "offset"
+        elif request_body and "page" in request_body:
+            pagination_mode, pagination_param = "page", "page"
+        else:
+            pagination_mode, pagination_param = "none", None
         size_param = "limit" if request_body and "limit" in request_body else None
         list_found = bool(job_urls) or bool(
             re.search(r"(职位|岗位|实习|intern|recruit)", page_html, re.IGNORECASE)
@@ -135,7 +141,7 @@ class BrowserAnalyzer:
                 "observation_code": observation_code,
                 "list_found": list_found,
                 "detail_found": None,
-                "pagination_verified": None,
+                "pagination_verified": False if pagination_mode != "none" else None,
                 "list_count": None,
                 "internship_count": None,
                 "valid_record_count": 0,

@@ -17,15 +17,16 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from auto_spider.config import get_settings
 from auto_spider.db.models import (
     CodeSubmission,
     CollectionDispatch,
     ManualRun,
     OnboardingTask,
+    PlatformSpec,
     WorkflowRun,
 )
 from auto_spider.db.session import SessionLocal
+from auto_spider.git.target import CollectorRepository
 from auto_spider.services.browser_evidence import sanitize_text
 from auto_spider.services.collection_dispatch import check_collection, claim_collection
 from auto_spider.services.collection_quality import assess_collection_quality
@@ -82,6 +83,14 @@ def execute_collection(run_id: str, session_factory=SessionLocal) -> dict:
             session.commit()
             return {"status": "CANCELLED"}
         task = session.scalar(select(OnboardingTask).where(OnboardingTask.task_id == run.task_id))
+        repository = CollectorRepository.for_repository_key(task.repository_key).path
+        legacy_repository = CollectorRepository.is_legacy_repository_key(task.repository_key)
+        current_spec = session.scalar(
+            select(PlatformSpec)
+            .where(PlatformSpec.task_id == run.task_id, PlatformSpec.is_current.is_(True))
+            .order_by(PlatformSpec.spec_version.desc())
+            .limit(1)
+        )
         selected = session.scalar(
             select(CodeSubmission).where(
                 CodeSubmission.task_id == run.task_id,
@@ -126,7 +135,7 @@ def execute_collection(run_id: str, session_factory=SessionLocal) -> dict:
             workspace.mkdir()
             scratch.mkdir()
             archive = subprocess.run(
-                ["git", "-C", str(get_settings().aicoding_repo_path), "archive", commit],
+                ["git", "-C", str(repository), "archive", commit],
                 capture_output=True,
                 check=True,
                 timeout=30,
@@ -146,6 +155,26 @@ def execute_collection(run_id: str, session_factory=SessionLocal) -> dict:
                     )
                 ]
                 bundle.extractall(workspace, members=members, filter="data")
+            id_normalization = (
+                "for item in items:\n"
+                "    if not isinstance(item, dict):\n"
+                "        continue\n"
+                "    item['source_platform'] = None\n"
+                "    item['platform_id'] = None\n"
+                "    item['entity_id'] = None\n"
+                "    raw = item.get('raw_content')\n"
+                "    job = raw.get('job') if isinstance(raw, dict) else None\n"
+                "    if isinstance(job, dict):\n"
+                "        job['platform_id'] = None\n"
+                "        job['entity_id'] = None\n"
+                if legacy_repository
+                else "for item in items:\n"
+                "    job = item.get('raw_content', {}).get('job', {})\n"
+                "    if any(item.get(k) is not None for k in "
+                "('source_platform', 'platform_id', 'entity_id')) or "
+                "any(job.get(k) is not None for k in ('platform_id', 'entity_id')):\n"
+                "        raise RuntimeError('COLLECTION_IDS_MUST_BE_NULL')\n"
+            )
             script = (
                 "import json, sys\n"
                 "from config.platforms import get_platform\n"
@@ -160,15 +189,10 @@ def execute_collection(run_id: str, session_factory=SessionLocal) -> dict:
                 "    pagination = getattr(collector, 'collection_diagnostics', {})\n"
                 "    json.dump(pagination, out, default=str)\n"
                 "items = [r.to_dict() if hasattr(r, 'to_dict') else r for r in records]\n"
-                "for item in items:\n"
-                "    job = item.get('raw_content', {}).get('job', {})\n"
-                "    if any(item.get(k) is not None for k in "
-                "('source_platform', 'platform_id', 'entity_id')) or "
-                "any(job.get(k) is not None for k in ('platform_id', 'entity_id')):\n"
-                "        raise RuntimeError('COLLECTION_IDS_MUST_BE_NULL')\n"
-                f"with open({str(scratch / 'records.json')!r}, 'w', encoding='utf-8') as out:\n"
-                "    json.dump(items, out, ensure_ascii=False, default=str)\n"
-                "print('Collection complete:', len(items))\n"
+                + id_normalization
+                + f"with open({str(scratch / 'records.json')!r}, 'w', encoding='utf-8') as out:\n"
+                + "    json.dump(items, out, ensure_ascii=False, default=str)\n"
+                + "print('Collection complete:', len(items))\n"
             )
             script = (
                 inspect.getsource(install_request_interval)
@@ -252,7 +276,15 @@ def execute_collection(run_id: str, session_factory=SessionLocal) -> dict:
             status = "CANCELLED"
         if status == "WAITING_REVIEW":
             status = "FAILED"
-    quality = assess_collection_quality(records, pagination=pagination) if not error else None
+    quality = (
+        assess_collection_quality(
+            records,
+            pagination=pagination,
+            filters=(current_spec.spec_json or {}).get("filters") if current_spec else None,
+        )
+        if not error
+        else None
+    )
     with session_factory() as session:
         run = session.scalar(
             select(ManualRun).where(ManualRun.manual_run_id == run_id).with_for_update()

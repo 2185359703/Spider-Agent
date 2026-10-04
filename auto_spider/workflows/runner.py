@@ -38,6 +38,7 @@ from auto_spider.services.evidence import EvidenceStore, sanitize
 from auto_spider.services.execution import ExecutionContext, ExecutionStopped, RunBusy
 from auto_spider.services.failure_diagnosis import diagnose_failure
 from auto_spider.services.spec_builder import build_platform_spec
+from auto_spider.services.spec_normalizer import normalize_analysis
 from auto_spider.services.workflow_logs import append_durable_log
 from auto_spider.validators.candidate import validate_candidate
 
@@ -563,6 +564,13 @@ class WorkflowRunner:
                 candidate = (
                     apply_correction(analysis, response) if response is not None else analysis
                 )
+                candidate, local_corrections = normalize_analysis(candidate)
+                if local_corrections:
+                    self._log(
+                        "build_spec",
+                        "本地规范化已修正证据支持的字段别名",
+                        {"corrections": local_corrections, "attempt": attempt},
+                    )
                 model = self._compile_discovery_spec(state, candidate)
                 if attempt:
                     self._log("build_spec", "接入规范纠错通过", {"attempt": attempt})
@@ -787,6 +795,7 @@ class WorkflowRunner:
                 generated["changed_files"],
                 live_url=state["entry_url"],
                 expected_observation=state["observation"].get("observation_code"),
+                internship_filters=(state.get("spec") or {}).get("filters"),
                 guard=self.execution.guard,
             )
         return {
@@ -901,6 +910,22 @@ class WorkflowRunner:
 
     def _report_gate(self, state, session):
         if state.get("passed"):
+            return {"route": "commit_candidate"}
+        # First-time onboarding should still expose the generated collector
+        # for human inspection.  Automatic repair belongs to the manual
+        # review loop; otherwise one validation issue can keep a batch in AI
+        # repair for a long time before an operator can even run the code.
+        generated = state.get("generated") or {}
+        validation = state.get("validation") or {}
+        validation_executed = any(f"{name}_status" in validation for name in CHECKS)
+        if (
+            state.get("kind") == "onboarding"
+            and not state.get("attempt")
+            and not state.get("skip_generation")
+            and validation_executed
+            and not generated.get("spec_patch_error")
+            and generated.get("changed_files")
+        ):
             return {"route": "commit_candidate"}
         return {"route": "close" if state.get("skip_generation") else "build_failure_bundle"}
 

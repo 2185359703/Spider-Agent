@@ -3,13 +3,14 @@
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from auto_spider.ai.workspace_access import WorkspaceAccess
 from auto_spider.schemas import AdapterSpec, EndpointsSpec, FieldsSpec, FiltersSpec, PaginationSpec
 from auto_spider.services.browser_evidence import sanitize_text
+from auto_spider.services.spec_normalizer import normalize_spec_draft
 
 
 class DiscoveryObservation(BaseModel):
@@ -40,6 +41,14 @@ class DiscoveryDraft(BaseModel):
     fields: FieldsSpec
     pagination: PaginationSpec
     filters: FiltersSpec
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_evidence_backed_aliases(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            normalized, _ = normalize_spec_draft(value)
+            return normalized
+        return value
 
 
 class AnalysisSubmission(BaseModel):

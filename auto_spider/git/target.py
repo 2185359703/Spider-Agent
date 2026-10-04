@@ -6,6 +6,10 @@ from pathlib import Path
 
 from auto_spider.config import get_settings
 
+LEGACY_REPOSITORY_KEYS = frozenset(
+    {"collector-catalog", "collector-control", "collector_control"}
+)
+
 
 @dataclass(frozen=True)
 class RepositoryInspection:
@@ -33,6 +37,29 @@ class CollectorRepository:
             or settings.collector_source_repo_path
         )
         self.baseline_ref = baseline_ref or settings.aicoding_baseline_ref
+
+    @classmethod
+    def for_repository_key(
+        cls, repository_key: str | None, *, baseline_ref: str | None = None
+    ) -> CollectorRepository:
+        """Resolve the repository that owns a task's recorded commit.
+
+        New tasks use the AI output repository. Older records created before
+        the repository split use ``collector-catalog`` and keep their commits
+        in the managed legacy checkout.
+        """
+        settings = get_settings()
+        key = (repository_key or "aicoding-auto_spider").strip().lower()
+        if cls.is_legacy_repository_key(key):
+            path = settings.legacy_collector_repo_path or (
+                settings.worktree_root / "collector-control"
+            )
+            return cls(path=path, baseline_ref=baseline_ref or "HEAD")
+        return cls(baseline_ref=baseline_ref)
+
+    @staticmethod
+    def is_legacy_repository_key(repository_key: str | None) -> bool:
+        return (repository_key or "").strip().lower() in LEGACY_REPOSITORY_KEYS
 
     @classmethod
     def source_repository(cls) -> CollectorRepository:

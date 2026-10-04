@@ -27,10 +27,34 @@ def published_datetime(value):
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
-def assess_collection_quality(records, *, pagination=None, now=None):
+def assess_collection_quality(records, *, pagination=None, filters=None, now=None):
+    """Check a collection against the deterministic PlatformSpec rules.
+
+    ``filters`` is optional for backwards compatibility with old collectors;
+    when supplied it is the serialized ``PlatformSpec.filters`` object.  The
+    check deliberately keeps the original records and reports findings so a
+    reviewer can inspect the source evidence instead of silently dropping a
+    questionable job.
+    """
     now = now or datetime.now(UTC)
     findings, source_ids, content_hashes = [], {}, {}
+    source_urls = {}
     missing_time = 0
+
+    internship = (filters or {}).get("internship", {}) if isinstance(filters, dict) else {}
+    include_keywords = [
+        str(value).strip().lower()
+        for value in internship.get("include_keywords", ["实习", "intern", "internship"])
+        if str(value).strip()
+    ]
+    exclude_keywords = [
+        str(value).strip().lower()
+        for value in internship.get("exclude_keywords", ["正式", "全职", "校招正式岗"])
+        if str(value).strip()
+    ]
+    match_scope = internship.get(
+        "match_scope", ["title", "employment_type", "category", "description", "requirements"]
+    )
 
     def finding(code, severity, field, indices, message, actual=None, expected=None):
         findings.append(
@@ -79,6 +103,19 @@ def assess_collection_quality(records, *, pagination=None, now=None):
             or not urlsplit(str(url)).hostname
         ):
             finding("MISSING_SOURCE_URL", "error", "source_url", [index], "岗位详情链接缺失或无效")
+        else:
+            normalized_url = str(url).strip()
+            if normalized_url in source_urls:
+                finding(
+                    "DUPLICATE_SOURCE_URL",
+                    "error",
+                    "source_url",
+                    [source_urls[normalized_url], index],
+                    "同一详情链接在本轮重复出现",
+                    normalized_url,
+                )
+            else:
+                source_urls[normalized_url] = index
         if not description and not requirements:
             finding("EMPTY_JOB_BODY", "error", "description", [index], "岗位描述和要求均无正文")
         digest = hashlib.md5(f"{title}\n{description}\n{requirements}".encode()).hexdigest()
@@ -93,23 +130,50 @@ def assess_collection_quality(records, *, pagination=None, now=None):
                 )
             else:
                 content_hashes[digest] = (sid, index)
-        label = " ".join(
-            plain_text(job.get(k))
-            for k in ("employment_type", "job_type", "category", "commitment")
+        scope_values = {
+            "title": title,
+            "employment_type": plain_text(job.get("employment_type")),
+            "job_type": plain_text(job.get("job_type")),
+            "category": plain_text(job.get("category")),
+            "commitment": plain_text(job.get("commitment")),
+            "description": description,
+            "requirements": requirements,
+        }
+        match_text = " ".join(
+            scope_values.get(str(key), "") for key in match_scope if str(key) in scope_values
+        ).lower()
+        type_text = " ".join(
+            scope_values.get(key, "")
+            for key in ("employment_type", "job_type", "category", "commitment")
+        ).lower()
+        def contains_keyword(text, keyword):
+            if re.fullmatch(r"[a-z0-9][a-z0-9 _-]*", keyword):
+                return bool(re.search(rf"\b{re.escape(keyword)}\b", text, re.I))
+            return keyword in text
+
+        positive = any(contains_keyword(match_text, keyword) for keyword in include_keywords)
+        # The job title is the strongest business signal for an internship
+        # collection. Some recruiting systems expose contradictory metadata
+        # such as title="算法实习生" with employment_type="正式". Keep such a
+        # record in the requested dataset instead of rejecting it because of
+        # the platform's generic employment field.
+        title_positive = any(
+            contains_keyword(title.lower(), keyword) for keyword in include_keywords
         )
-        positive = bool(re.search(r"实习|\bintern(?:ship)?\b", title + " " + label, re.I))
-        negative = bool(re.search(r"非实习|不是实习|校招正式岗", title + " " + label))
-        formal = bool(re.search(r"正式|全职|\bfull[- ]?time\b|\bpermanent\b", label, re.I))
-        if negative or (formal and not positive):
+        negative = any(contains_keyword(match_text, keyword) for keyword in exclude_keywords)
+        formal = bool(
+            re.search(r"正式|全职|\bfull[- ]?time\b|\bpermanent\b", type_text, re.I)
+        )
+        if (negative or formal) and not title_positive:
             finding(
                 "NON_INTERNSHIP_RECORD",
                 "error",
                 "internship_filter",
                 [index],
                 "岗位类型明确不属于实习",
-                label or title,
+                match_text or title,
             )
-        elif not positive:
+        elif not positive and not title_positive:
             finding(
                 "INTERNSHIP_NOT_CONFIRMED",
                 "warning",
@@ -158,6 +222,23 @@ def assess_collection_quality(records, *, pagination=None, now=None):
             f"{missing_time} 条岗位未提供发布时间",
         )
     pagination = pagination or {}
+    fingerprints = pagination.get("page_fingerprints")
+    if isinstance(fingerprints, list):
+        seen = {}
+        repeated = []
+        for page_index, fingerprint in enumerate(fingerprints, 1):
+            if fingerprint in seen:
+                repeated.extend([seen[fingerprint], page_index])
+            else:
+                seen[fingerprint] = page_index
+        if repeated:
+            finding(
+                "PAGINATION_REPEATED_PAGE",
+                "error",
+                "pagination",
+                sorted(set(repeated)),
+                "分页响应指纹重复，可能遗漏或重复采集",
+            )
     pagination_status = "PARTIAL"
     expected = pagination.get("expected_total")
     if pagination.get("scope_complete") is True and isinstance(expected, int):
