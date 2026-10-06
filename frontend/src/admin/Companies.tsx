@@ -358,13 +358,13 @@ export function CompaniesPage() {
     if (run && ["FAILED", "TIMED_OUT"].includes(run.status))
       return (
         <Link to={contextLink("/data", t.task_id, { run: run.manual_run_id })}>
-          查看原因
+          反馈给 AI
         </Link>
       );
-    if (run && run.status === "WAITING_REVIEW" && counts[t.task_id]?.count)
+    if (run && run.status === "WAITING_REVIEW")
       return (
         <Link to={contextLink("/data", t.task_id, { run: run.manual_run_id })}>
-          审查数据
+          反馈给 AI
         </Link>
       );
     if (["ANALYZING", "REPAIRING", "SUBMITTED"].includes(status))

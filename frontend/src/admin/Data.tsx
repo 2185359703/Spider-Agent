@@ -17,6 +17,7 @@ import {
   DownloadOutlined,
   ExportOutlined,
   FileTextOutlined,
+  MessageOutlined,
   SearchOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
@@ -221,6 +222,7 @@ export function DataPage() {
             {run && (
               <Button
                 type="default"
+                icon={<MessageOutlined />}
                 loading={busy}
                 onClick={finalize}
                 disabled={
@@ -230,7 +232,7 @@ export function DataPage() {
                   )
                 }
               >
-                反馈本轮问题
+                反馈给 AI
               </Button>
             )}
             {run?.status === "WAITING_REVIEW" && run.record_count === 0 && !run.error_msg && (
