@@ -61,7 +61,7 @@ export function CollectDrawer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [scope, setScope] = useState("all");
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState(60);
   const initialized = useRef("");
   const seed = entries.map((t) => t.task_id).join("|") + (pinned || "");
   const ids = useRef<Record<string, string>>({});
@@ -88,6 +88,7 @@ export function CollectDrawer({
     setPages(50);
     setTimeout(600);
     setInterval(1);
+    setDays(60);
     setError("");
   }, [entries, pinned, submissions, seed]);
   async function start() {
@@ -226,7 +227,7 @@ export function CollectDrawer({
             min={1}
             max={3650}
             value={days}
-            onChange={(v) => setDays(v || 30)}
+            onChange={(v) => setDays(v || 60)}
           />{" "}
           天内发布的岗位
         </div>
