@@ -7,6 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from openhands.agent_server.api import api
 from openhands.agent_server.dependencies import check_session_api_key
 
+# The Agent Server is a separate Python process from the API/worker.  Import
+# the tool module here so its ToolDefinition classes register before any
+# remote conversation resolves CollectorReadTool/CollectorBrowserTool.
+from auto_spider.ai import collector_tools as _collector_tools  # noqa: F401
 from auto_spider.ai.browser_cli import BrowserCLI, runtime_root, validate_id
 from auto_spider.ai.openhands_compat import install_provider_compat
 from auto_spider.ai.workspace_access import load_policy

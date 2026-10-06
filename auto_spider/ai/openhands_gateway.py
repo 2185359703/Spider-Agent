@@ -123,7 +123,14 @@ class OpenHandsGateway:
                     result_json={},
                 )
                 session.add(record)
-            elif record.status in {"DISCONNECTED", "FAILED", "ERROR"}:
+            elif record.status in {
+                "DISCONNECTED",
+                "FAILED",
+                "ERROR",
+                "TIMED_OUT",
+                "INTERRUPTED",
+                "PAUSED",
+            }:
                 # Never reuse a remote conversation after a transport or
                 # provider failure.  OpenCode may have persisted a half-way
                 # thinking turn that cannot be replayed; rotate only the

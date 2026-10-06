@@ -35,13 +35,25 @@ RUN pip install --upgrade pip \
     && pip install \
         "openhands-agent-server==1.49.6" \
         "openhands-sdk==1.49.6" \
-        "openhands-tools==1.49.6"
+        "openhands-tools==1.49.6" \
+        "playwright==1.63.0"
+
+# OpenHands' built-in browser tool imports the Python Playwright package. The
+# CLI browser installation above is not sufficient for its availability check.
+RUN PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
+    python -m playwright install chromium
+
+# OpenHands' browser availability probe uses the conventional root cache path
+# and does not read PLAYWRIGHT_BROWSERS_PATH. Point that probe at the same
+# browser cache without duplicating the 300 MB download.
+RUN mkdir -p /root/.cache \
+    && ln -s /opt/playwright-browsers /root/.cache/ms-playwright
 
 COPY auto_spider/__init__.py /opt/auto-spider/auto_spider/__init__.py
 COPY auto_spider/schemas.py /opt/auto-spider/auto_spider/schemas.py
 COPY auto_spider/ai/__init__.py auto_spider/ai/collector_tools.py auto_spider/ai/workspace_access.py auto_spider/ai/browser_cli.py auto_spider/ai/browser_server_routes.py auto_spider/ai/openhands_compat.py /opt/auto-spider/auto_spider/ai/
 COPY auto_spider/services/__init__.py auto_spider/services/browser_evidence.py auto_spider/services/validation_activity.py /opt/auto-spider/auto_spider/services/
-COPY auto_spider/services/spec_patch.py /opt/auto-spider/auto_spider/services/
+COPY auto_spider/services/spec_patch.py auto_spider/services/spec_normalizer.py /opt/auto-spider/auto_spider/services/
 COPY auto_spider/services/analysis_submission.py /opt/auto-spider/auto_spider/services/
 
 CMD ["python", "-m", "openhands.agent_server", "--host", "0.0.0.0", "--port", "8000", "--import-modules", "auto_spider.ai.browser_server_routes"]
