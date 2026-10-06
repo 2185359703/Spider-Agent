@@ -174,7 +174,13 @@ class WorkflowRunner:
                     if bundle is None:
                         raise ValueError("FAILURE_BUNDLE_NOT_FOUND")
                     if bundle.review_id is None:
-                        raise ValueError("AUTO_FAILURE_RESUME_ORIGINAL_RUN")
+                        auto_validation_retry = (
+                            bundle.failure_type == "AUTO_VALIDATION_FAILED"
+                            and task.status == "BLOCKED"
+                            and (bundle.status or "") in {"CREATED", "NEEDS_REVIEW"}
+                        )
+                        if not auto_validation_retry:
+                            raise ValueError("AUTO_FAILURE_RESUME_ORIGINAL_RUN")
                     if bundle.status == "REPAIRED":
                         return {"task_id": task_id, "status": task.status, "idempotent": True}
                 run = WorkflowRun(

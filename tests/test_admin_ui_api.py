@@ -366,6 +366,32 @@ def test_company_review_keeps_unresolved_issues_blocking(admin_context, monkeypa
     assert session.query(CodeSubmission).one().adoption_status == "candidate"
 
 
+def test_company_review_uses_latest_reviewable_run_after_failed_retry(admin_context):
+    client, session, _, commit = admin_context
+    seed_run(session, commit, [{"title": "上一轮岗位"}], run_id="manual-success")
+    now = datetime.now(UTC)
+    session.add(
+        ManualRun(
+            manual_run_id="manual-failed-retry",
+            task_id="task",
+            code_revision=commit,
+            command_profile="test",
+            environment_fingerprint="test",
+            started_at=now,
+            finished_at=now,
+            artifact_manifest_ref="failed.json",
+            status="FAILED",
+            result_json={"record_count": 0, "error_msg": "temporary upstream error"},
+        )
+    )
+    session.commit()
+
+    summary = client.get(
+        "/api/v1/admin/companies/review-summary", params={"company_name": "公司"}
+    ).json()
+    assert [run["manual_run_id"] for run in summary["runs"]] == ["manual-success"]
+
+
 def test_code_edit_saves_new_commit_keeps_dirty_checkout_and_is_idempotent(
     admin_context, monkeypatch, tmp_path
 ):

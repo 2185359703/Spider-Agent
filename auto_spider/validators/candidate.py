@@ -285,18 +285,21 @@ def validate_candidate(
     if live_url:
         from auto_spider.services.collection_quality import (
             assess_collection_quality,
+            comparable_source_url,
             plain_text,
             published_datetime,
         )
 
         quality_runtime = (
             "import hashlib, html, re\nfrom datetime import UTC, datetime, timedelta\n"
-            "from urllib.parse import urlsplit\nfrom zoneinfo import ZoneInfo\n"
+            "from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit\n"
+            "from zoneinfo import ZoneInfo\n"
             + "\n".join(
                 inspect.getsource(fn)
                 for fn in (
                     plain_text,
                     published_datetime,
+                    comparable_source_url,
                     assess_collection_quality,
                 )
             )

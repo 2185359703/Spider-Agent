@@ -953,7 +953,15 @@ def repair_task(
     if bundle.status == "REPAIRED":
         return {"task_id": task_id, "status": "WAITING_MANUAL_RUN", "idempotent": True}
     if bundle.review_id is None:
-        raise HTTPException(status_code=409, detail="AUTO_FAILURE_RESUME_ORIGINAL_RUN")
+        task = session.scalar(select(OnboardingTask).where(OnboardingTask.task_id == task_id))
+        auto_validation_retry = (
+            bundle.failure_type == "AUTO_VALIDATION_FAILED"
+            and task is not None
+            and task.status == "BLOCKED"
+            and (bundle.status or "") in {"CREATED", "NEEDS_REVIEW"}
+        )
+        if not auto_validation_retry:
+            raise HTTPException(status_code=409, detail="AUTO_FAILURE_RESUME_ORIGINAL_RUN")
     queue_workflow(session, task_id, f"repair:{request.client_request_id}", bundle.bundle_id)
     session.commit()
     enqueue_repair(task_id, request.failure_bundle_id)

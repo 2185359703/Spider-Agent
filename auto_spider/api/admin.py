@@ -792,13 +792,19 @@ def company_tasks(session, name):
 def company_review_summary(company_name: str, session: DbSession, actor: CurrentActor):
     runs = []
     for task in company_tasks(session, company_name):
-        run = session.scalar(
-            select(ManualRun)
-            .where(ManualRun.task_id == task.task_id)
-            .order_by(ManualRun.id.desc())
-            .limit(1)
+        run = next(
+            (
+                candidate
+                for candidate in session.scalars(
+                    select(ManualRun)
+                    .where(ManualRun.task_id == task.task_id)
+                    .order_by(ManualRun.id.desc())
+                )
+                if candidate.status == "WAITING_REVIEW"
+            ),
+            None,
         )
-        if not run or run.status != "WAITING_REVIEW":
+        if run is None:
             continue
         submission = session.scalar(
             select(CodeSubmission.id)
@@ -853,7 +859,7 @@ def approve_company(request: CompanyReviewRequest, session: DbSession, actor: Re
             run = session.scalar(
                 select(ManualRun)
                 .where(ManualRun.task_id == snapshot.task_id)
-                .order_by(ManualRun.id.desc())
+                .where(ManualRun.manual_run_id == snapshot.manual_run_id)
                 .limit(1)
                 .with_for_update()
             )
