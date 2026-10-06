@@ -78,32 +78,42 @@ class EvidenceStore:
                 AgentExecution.task_id == task_id, AgentExecution.run_id == run_id
             )
         ).all()
-        for execution_id in ids:
-            for folder in task_root.glob(f"**/agent-browser/{execution_id}"):
-                if folder.is_symlink() or task_root not in folder.resolve().parents:
+        capture_folders = {
+            folder
+            for execution_id in ids
+            for folder in task_root.glob(f"**/agent-browser/{execution_id}")
+        }
+        # The bounded Python Playwright fallback writes ``browser/`` directly
+        # under a run.  Index the same redacted JSON/text/HTML artifacts so
+        # selectors emitted by the fallback remain downloadable evidence too.
+        capture_folders.update(folder for folder in task_root.glob("**/browser") if folder.is_dir())
+        for folder in capture_folders:
+            if folder.is_symlink() or task_root not in folder.resolve().parents:
+                continue
+            for file in folder.iterdir():
+                if file.suffix.lower() not in {".json", ".txt", ".html"}:
                     continue
-                for file in folder.glob("*.json"):
-                    if file.is_symlink() or file.stat().st_size > get_settings().max_evidence_bytes:
-                        continue
-                    relative = file.relative_to(root).as_posix()
-                    evidence_id = hashlib.sha1(
-                        f"{task_id}:{run_id}:{relative}".encode()
-                    ).hexdigest()[:32]
-                    if session.scalar(
-                        select(EvidenceFile.id).where(EvidenceFile.evidence_id == evidence_id)
-                    ):
-                        continue
-                    content = file.read_bytes()
-                    session.add(
-                        EvidenceFile(
-                            evidence_id=evidence_id,
-                            task_id=task_id,
-                            run_id=run_id,
-                            relative_path=relative,
-                            file_type="browser_cli",
-                            sha256=hashlib.sha256(content).hexdigest(),
-                            size_bytes=len(content),
-                            redaction_status="redacted",
-                        )
+                if file.is_symlink() or file.stat().st_size > get_settings().max_evidence_bytes:
+                    continue
+                relative = file.relative_to(root).as_posix()
+                evidence_id = hashlib.sha1(f"{task_id}:{run_id}:{relative}".encode()).hexdigest()[
+                    :32
+                ]
+                if session.scalar(
+                    select(EvidenceFile.id).where(EvidenceFile.evidence_id == evidence_id)
+                ):
+                    continue
+                content = file.read_bytes()
+                session.add(
+                    EvidenceFile(
+                        evidence_id=evidence_id,
+                        task_id=task_id,
+                        run_id=run_id,
+                        relative_path=relative,
+                        file_type="browser_cli",
+                        sha256=hashlib.sha256(content).hexdigest(),
+                        size_bytes=len(content),
+                        redaction_status="redacted",
                     )
+                )
         session.flush()

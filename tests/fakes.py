@@ -76,8 +76,14 @@ class FakeAnalyzer:
         }
         return AnalysisResult(
             observation=observation,
-            list_endpoint=f"{entry_url}#list" if found else None,
-            detail_endpoint=f"{entry_url}#detail" if observation["detail_found"] else None,
+            list_endpoint=(
+                f"https://fixtures.example.test/{platform_key}/api/list" if found else None
+            ),
+            detail_endpoint=(
+                f"https://fixtures.example.test/{platform_key}/api/jobs/{{source_id}}"
+                if observation["detail_found"]
+                else None
+            ),
             evidence_refs=[
                 f"analysis/{platform_key}/entry.json",
                 f"analysis/{platform_key}/network.json",

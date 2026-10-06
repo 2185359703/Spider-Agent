@@ -68,3 +68,21 @@ def test_unobserved_cursor_alias_is_not_guessed():
 
     with pytest.raises(ValidationError, match="offset 模式必须提供 page_param"):
         DiscoveryDraft.model_validate(draft)
+
+
+def test_endpoint_aliases_are_moved_to_typed_locations():
+    draft = draft_with_offset_alias()
+    draft["endpoints"]["list"]["total_count_selector"] = {
+        "source": "response_body",
+        "kind": "json_path",
+        "expression": "$.data.total",
+        "confidence": "medium",
+        "evidence_refs": ["capture.json"],
+    }
+    draft["endpoints"]["detail"]["key_source"] = "id"
+    model = DiscoveryDraft.model_validate(draft)
+    assert model.pagination.total_count_selector is not None
+    assert model.pagination.total_count_selector.expression == "$.data.total"
+    assert model.endpoints.detail is not None
+    assert model.endpoints.detail.decode is not None
+    assert model.endpoints.detail.decode.key_source == "id"

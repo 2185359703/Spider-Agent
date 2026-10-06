@@ -40,6 +40,28 @@ def test_browser_evidence_is_indexed_once_and_survives_cache_cleanup(db_session,
     assert capture.exists()
 
 
+def test_python_playwright_fallback_evidence_is_indexed(db_session, tmp_path):
+    task = make_task(db_session)
+    run_id = "c" * 32
+    db_session.add(WorkflowRun(run_id=run_id, task_id=task.task_id, run_type="test"))
+    db_session.commit()
+    root = tmp_path / "evidence"
+    browser = root / task.task_id / run_id / "browser"
+    browser.mkdir(parents=True)
+    (browser / "network.json").write_text("{}", encoding="utf-8")
+    (browser / "page.html").write_text("<html></html>", encoding="utf-8")
+    (browser / "response-0.txt").write_text("{}", encoding="utf-8")
+    (browser / "page.png").write_bytes(b"ignored")
+    store = EvidenceStore(root)
+    store.register_browser_files(db_session, task_id=task.task_id, run_id=run_id)
+    rows = list(db_session.scalars(select(EvidenceFile)))
+    assert {row.relative_path for row in rows} == {
+        (browser / "network.json").relative_to(root).as_posix(),
+        (browser / "page.html").relative_to(root).as_posix(),
+        (browser / "response-0.txt").relative_to(root).as_posix(),
+    }
+
+
 def test_tool_can_read_returned_evidence_reference_within_owned_root(tmp_path):
     root = tmp_path / "evidence"
     root.mkdir()
