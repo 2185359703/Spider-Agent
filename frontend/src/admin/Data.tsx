@@ -16,6 +16,7 @@ import {
   CheckCircleOutlined,
   DownloadOutlined,
   ExportOutlined,
+  FileTextOutlined,
   SearchOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
@@ -317,6 +318,15 @@ export function DataPage() {
             })}
           >
             代码 {run.code_revision.slice(0, 7)} ↗
+          </Link>
+          <Link
+            to={contextLink("/logs", run.task_id, {
+              run: run.workflow_run_id,
+            })}
+          >
+            <Button type="link" size="small" icon={<FileTextOutlined />}>
+              采集日志
+            </Button>
           </Link>
           {["RUNNING", "QUEUED", "CANCEL_REQUESTED"].includes(run.status) && (
             <Button

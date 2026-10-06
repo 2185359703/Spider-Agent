@@ -157,6 +157,7 @@ export interface RecordRun {
   manual_run_id: string;
   task_id: string;
   code_revision: string;
+  workflow_run_id?: string;
   status: string;
   created_at: string;
   error_msg?: string;

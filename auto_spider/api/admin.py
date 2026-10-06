@@ -469,6 +469,7 @@ def collected_records(
                 "manual_run_id": run.manual_run_id,
                 "task_id": task.task_id,
                 "code_revision": run.code_revision,
+                "workflow_run_id": (run.result_json or {}).get("workflow_run_id"),
                 "status": run.status,
                 "created_at": run.created_at,
                 "error_msg": (run.result_json or {}).get("error_msg"),
