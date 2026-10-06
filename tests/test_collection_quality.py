@@ -115,3 +115,83 @@ def test_explicit_internship_title_overrides_contradictory_formal_metadata():
     codes = {finding["code"] for finding in result["findings"]}
     assert "NON_INTERNSHIP_RECORD" not in codes
     assert result["status"] == "PASS"
+
+
+def test_quality_reads_publish_time_from_nested_job_when_top_level_is_empty():
+    record = job("nested-publish-time")
+    record["publish_time"] = None
+    record["raw_content"]["job"]["publish_time"] = "2026-09-29T09:30:00+08:00"
+    result = assess_collection_quality(
+        [record],
+        pagination={"termination_verified": True},
+        now=datetime(2026, 9, 30, tzinfo=UTC),
+    )
+    assert result["metrics"]["missing_publish_time"] == 0
+    assert not any(f["code"] == "INVALID_PUBLISH_TIME" for f in result["findings"])
+
+
+def test_quality_detects_duplicate_urls_after_tracking_parameter_normalization():
+    first = job("tracking-1")
+    first["source_url"] = "https://example.com/jobs/1?utm_source=mail&lang=zh"
+    second = job("tracking-2")
+    second["source_url"] = "https://EXAMPLE.com/jobs/1?lang=zh&utm_medium=campaign"
+    result = assess_collection_quality(
+        [first, second], pagination={"termination_verified": True}
+    )
+    assert any(f["code"] == "DUPLICATE_SOURCE_URL" for f in result["findings"])
+
+
+def test_quality_honours_match_mode_all_and_must_match():
+    record = job("all-keywords")
+    record["raw_content"]["job"].update(
+        title="研发实习生", description="参与后端开发", requirements="在校生"
+    )
+    result = assess_collection_quality(
+        [record],
+        filters={
+            "internship": {
+                "match_scope": ["title", "description"],
+                "include_keywords": ["实习", "intern"],
+                "match_mode": "all",
+                "must_match": True,
+            }
+        },
+        pagination={"termination_verified": True},
+    )
+    assert any(f["code"] == "INTERNSHIP_NOT_CONFIRMED" for f in result["findings"])
+    result = assess_collection_quality(
+        [record],
+        filters={
+            "internship": {
+                "match_scope": ["title", "description"],
+                "include_keywords": ["实习", "intern"],
+                "match_mode": "all",
+                "must_match": False,
+            }
+        },
+        pagination={"termination_verified": True},
+    )
+    assert not any(f["code"] == "INTERNSHIP_NOT_CONFIRMED" for f in result["findings"])
+
+
+def test_quality_cross_checks_pagination_diagnostics_against_output():
+    first, second = job("diag-1"), job("diag-2")
+    result = assess_collection_quality(
+        [first, second],
+        pagination={
+            "termination_verified": True,
+            "expected_total": "2",
+            "unique_source_ids": 1,
+            "record_count": 3,
+        },
+    )
+    codes = {finding["code"] for finding in result["findings"]}
+    assert {"PAGINATION_DIAGNOSTIC_MISMATCH", "PAGINATION_RECORD_COUNT_MISMATCH"} <= codes
+    assert result["status"] == "FAIL"
+
+
+def test_quality_reports_invalid_url_without_raising():
+    record = job("bad-url")
+    record["source_url"] = "https://[broken-host/jobs/1"
+    result = assess_collection_quality([record], pagination={"termination_verified": True})
+    assert any(f["code"] == "MISSING_SOURCE_URL" for f in result["findings"])
